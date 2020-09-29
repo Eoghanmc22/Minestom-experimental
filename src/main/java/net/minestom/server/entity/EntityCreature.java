@@ -1,7 +1,11 @@
 package net.minestom.server.entity;
 
 import com.extollit.gaming.ai.path.HydrazinePathFinder;
+import com.extollit.gaming.ai.path.model.INode;
 import com.extollit.gaming.ai.path.model.IPath;
+import com.extollit.linalg.immutable.Vec3i;
+import lombok.Getter;
+import lombok.Setter;
 import net.minestom.server.MinecraftServer;
 import net.minestom.server.attribute.Attribute;
 import net.minestom.server.entity.ai.GoalSelector;
@@ -12,6 +16,7 @@ import net.minestom.server.event.item.ArmorEquipEvent;
 import net.minestom.server.instance.Chunk;
 import net.minestom.server.instance.Instance;
 import net.minestom.server.instance.WorldBorder;
+import net.minestom.server.instance.block.Block;
 import net.minestom.server.item.ItemStack;
 import net.minestom.server.network.packet.server.play.EntityEquipmentPacket;
 import net.minestom.server.network.packet.server.play.EntityPacket;
@@ -33,6 +38,7 @@ public abstract class EntityCreature extends LivingEntity {
 
     private final PFPathingEntity pathingEntity = new PFPathingEntity(this);
     private HydrazinePathFinder pathFinder;
+    @Getter
     private IPath path;
     private Position pathPosition;
 
@@ -50,6 +56,11 @@ public abstract class EntityCreature extends LivingEntity {
     private ItemStack chestplate;
     private ItemStack leggings;
     private ItemStack boots;
+
+    @Getter
+    @Setter
+    private boolean debugPathfinder = false;
+    private final ArrayList<Vec3i> debugNodes = new ArrayList<>();
 
     private final ReentrantLock pathLock = new ReentrantLock();
 
@@ -127,9 +138,25 @@ public abstract class EntityCreature extends LivingEntity {
                 if (path != null) {
                     final float speed = getAttributeValue(Attribute.MOVEMENT_SPEED);
                     final Position targetPosition = pathingEntity.getTargetPosition();
+                    if (debugPathfinder) {
+                        for (final Vec3i bPos : debugNodes) {
+                            getInstance().setBlock(bPos.x, bPos.y, bPos.z, Block.AIR);
+                        }
+                        debugNodes.clear();
+                        for (INode node : path) {
+                            final Vec3i coordinates = node.coordinates();
+                            if (!coordinates.equals(path.last().coordinates())) {
+                                getInstance().setBlock(coordinates.x, coordinates.y, coordinates.z, Block.DANDELION);
+                                debugNodes.add(coordinates);
+                            }
+                        }
+                        getInstance().setBlock(pathPosition.toBlockPosition(), Block.POPPY);
+                    }
                     moveTowards(targetPosition, speed);
                 } else {
                     if (pathPosition != null) {
+                        if (debugPathfinder)
+                            getInstance().setBlock(pathPosition.toBlockPosition(), Block.fromStateId((short) 0));
                         this.pathPosition = null;
                         this.pathFinder.reset();
                     }

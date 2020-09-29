@@ -3,6 +3,7 @@ package net.minestom.server.listener;
 import net.minestom.server.MinecraftServer;
 import net.minestom.server.data.Data;
 import net.minestom.server.entity.Entity;
+import net.minestom.server.entity.EntityType;
 import net.minestom.server.entity.GameMode;
 import net.minestom.server.entity.Player;
 import net.minestom.server.event.player.PlayerBlockInteractEvent;
@@ -86,7 +87,8 @@ public class BlockPlacementListener {
             boolean intersect = false;
             if (block.isSolid()) {
                 for (Entity entity : entities) {
-                    intersect = entity.getBoundingBox().intersect(blockPosition);
+                    if (entity.getEntityType() != EntityType.ITEM)
+                        intersect = entity.getBoundingBox().intersect(blockPosition);
                     if (intersect)
                         break;
                 }

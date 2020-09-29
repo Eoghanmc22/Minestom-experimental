@@ -282,6 +282,13 @@ public class TagManager {
      */
     public void addRequiredTag(Tag.BasicTypes type, NamespaceID name) {
         requiredTags.add(new RequiredTag(type, name));
+        try {
+            load(name, type.name().toLowerCase());
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+            LOGGER.error("Some tags weren't found. Try regenerating the minecaft_data folder");
+            System.exit(3);
+        }
     }
 
     private Tag silentLoad(NamespaceID name, String type) {

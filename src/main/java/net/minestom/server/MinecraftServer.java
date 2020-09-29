@@ -186,7 +186,6 @@ public class MinecraftServer {
         updateManager = new UpdateManager();
 
         lootTableManager = new LootTableManager();
-        tagManager = new TagManager();
 
         nettyServer = new NettyServer(packetProcessor);
 
@@ -196,6 +195,8 @@ public class MinecraftServer {
         } catch (IOException e) {
             LOGGER.error("An error happened during resource gathering. Minestom will attempt to load anyway, but things may not work, and crashes can happen.", e);
         }
+
+        tagManager = new TagManager();
 
         minecraftServer = new MinecraftServer();
 
