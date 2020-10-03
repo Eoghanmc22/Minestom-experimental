@@ -28,6 +28,17 @@ public interface SerializableData extends Data {
     byte[] getSerializedData(Object2ShortMap<String> typeToIndexMap, boolean indexed);
 
     /**
+     * Read the data of a {@link SerializableData} when you already have the index map
+     * <p>
+     * WARNING: the data to read should not have any index to read and your index map should be COMPLETE
+     * Use {@link #readIndexedSerializedData(BinaryReader)} if you need to read the header
+     *
+     * @param reader         the binary reader
+     * @param typeToIndexMap the index map
+     */
+    void readSerializedData(BinaryReader reader, Object2ShortMap<String> typeToIndexMap);
+
+    /**
      * Serialize the data into an array of bytes
      * <p>
      * Use {@link #readIndexedSerializedData(BinaryReader)}
@@ -37,15 +48,9 @@ public interface SerializableData extends Data {
      *
      * @return the array representation of this data object
      */
-    byte[] getIndexedSerializedData();
-
-    /**
-     * Read the data of a {@link SerializableData} when you already have the index map
-     *
-     * @param reader         the binary reader
-     * @param typeToIndexMap the index map
-     */
-    void readSerializedData(BinaryReader reader, Object2ShortMap<String> typeToIndexMap);
+    default byte[] getIndexedSerializedData() {
+        return getSerializedData(new Object2ShortOpenHashMap<>(), true);
+    }
 
     /**
      * Read the index map and the data of a serialized {@link SerializableData}
@@ -53,10 +58,13 @@ public interface SerializableData extends Data {
      *
      * @param reader the binary reader
      */
-    void readIndexedSerializedData(BinaryReader reader);
+    default void readIndexedSerializedData(BinaryReader reader) {
+        final Object2ShortMap<String> typeToIndexMap = SerializableData.readDataIndexes(reader);
+        readSerializedData(reader, typeToIndexMap);
+    }
 
     /**
-     * Get the index info (class name -&gt; class index)
+     * Write the index info (class name -&gt; class index), used to write the header for indexed serialized data
      * <p>
      * Sized by a var-int
      *
@@ -78,7 +86,9 @@ public interface SerializableData extends Data {
     }
 
     /**
-     * Get a map containing the indexes of your data (type name -&gt; type index)
+     * Read a data index map (type name -&gt; type index)
+     * <p>
+     * Can then be used with {@link SerializableData#readSerializedData(BinaryReader, Object2ShortMap)}
      *
      * @param binaryReader the reader
      * @return a map containing the indexes of your data
