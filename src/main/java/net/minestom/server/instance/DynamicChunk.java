@@ -4,6 +4,7 @@ import com.extollit.gaming.ai.path.model.ColumnarOcclusionFieldList;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ShortMap;
 import it.unimi.dsi.fastutil.objects.Object2ShortOpenHashMap;
+import net.minestom.server.MinecraftServer;
 import net.minestom.server.data.Data;
 import net.minestom.server.data.SerializableData;
 import net.minestom.server.data.SerializableDataImpl;
@@ -17,6 +18,7 @@ import net.minestom.server.utils.chunk.ChunkCallback;
 import net.minestom.server.utils.chunk.ChunkUtils;
 import net.minestom.server.world.biomes.Biome;
 
+import java.io.IOException;
 import java.util.concurrent.CopyOnWriteArraySet;
 
 public class DynamicChunk extends Chunk {
@@ -27,8 +29,9 @@ public class DynamicChunk extends Chunk {
     protected final short[] blocksStateId = new short[CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z];
     protected final short[] customBlocksId = new short[CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z];
 
-    public DynamicChunk(Instance instance, Biome[] biomes, int chunkX, int chunkZ) {
+    public DynamicChunk(Instance instance, Biome[] biomes, int chunkX, int chunkZ, boolean generated) {
         super(instance, biomes, chunkX, chunkZ);
+        getData().set("generated", generated, Boolean.class);
     }
 
     @Override
@@ -131,6 +134,8 @@ public class DynamicChunk extends Chunk {
         this.blocksStateId[blockIndex] = blockStateId;
     }
 
+    private static final int dataFormatVersion = 2;
+
     /**
      * Serialize this {@link Chunk} based on {@link #readChunk(BinaryReader, ChunkCallback)}
      * <p>
@@ -150,6 +155,11 @@ public class DynamicChunk extends Chunk {
         for (int i = 0; i < BIOME_COUNT; i++) {
             final byte id = (byte) biomes[i].getId();
             binaryWriter.writeByte(id);
+        }
+
+        binaryWriter.writeBoolean(data != null);
+        if (data != null) {
+            binaryWriter.writeBytes(data.getSerializedData(new Object2ShortOpenHashMap<>(), true));
         }
 
         for (byte x = 0; x < CHUNK_SIZE_X; x++) {
@@ -196,6 +206,13 @@ public class DynamicChunk extends Chunk {
         // Add the hasIndex field & the index header if it has it
         binaryWriter.writeAtStart(indexWriter);
 
+        //Metadata
+        int gameVersion = MinecraftServer.PROTOCOL_VERSION;
+        BinaryWriter metadata = new BinaryWriter();
+        metadata.writeInt(dataFormatVersion);
+        metadata.writeInt(gameVersion);
+        binaryWriter.writeAtStart(metadata);
+
         return binaryWriter.toByteArray();
     }
 
@@ -206,6 +223,15 @@ public class DynamicChunk extends Chunk {
 
         ChunkBatch chunkBatch = instance.createChunkBatch(this);
         try {
+            reader.mark(4);
+            boolean latestStructure = reader.readInteger() == dataFormatVersion;
+            if (!latestStructure)
+                reader.reset();
+            boolean latestIds = true;
+            if (latestStructure) {
+                //todo do something if incorrect version
+                latestIds = reader.readInteger() == MinecraftServer.PROTOCOL_VERSION;
+            }
 
             // Get if the chunk has data indexes (used for blocks data)
             final boolean hasIndex = reader.readBoolean();
@@ -217,6 +243,10 @@ public class DynamicChunk extends Chunk {
             for (int i = 0; i < BIOME_COUNT; i++) {
                 final byte id = reader.readByte();
                 this.biomes[i] = BIOME_MANAGER.getById(id);
+            }
+
+            if (latestStructure && reader.readBoolean()) {
+                data.readIndexedSerializedData(reader);
             }
 
             while (true) {
@@ -248,7 +278,7 @@ public class DynamicChunk extends Chunk {
                     chunkBatch.setBlockStateId(x, y, z, blockStateId, data);
                 }
             }
-        } catch (IndexOutOfBoundsException e) {
+        } catch (IndexOutOfBoundsException | IOException e) {
             // Finished reading
         }
 

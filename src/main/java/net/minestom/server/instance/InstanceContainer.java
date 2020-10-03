@@ -334,30 +334,77 @@ public class InstanceContainer extends Instance {
         return allowed;
     }
 
-    @Override
-    public void loadChunk(int chunkX, int chunkZ, ChunkCallback callback) {
+    public void getTempChunk(int chunkX, int chunkZ, ChunkCallback callback) {
         final Chunk chunk = getChunk(chunkX, chunkZ);
         if (chunk != null) {
             // Chunk already loaded
             if (callback != null)
                 callback.accept(chunk);
         } else {
+            //done in case chunk callback is async
+            Runnable r = () -> {
+                // Not found, create a new chunk
+                Biome[] biomes = new Biome[Chunk.BIOME_COUNT];
+                if (chunkGenerator == null) {
+                    Arrays.fill(biomes, MinecraftServer.getBiomeManager().getById(0));
+                } else {
+                    chunkGenerator.fillBiomes(biomes, chunkX, chunkZ);
+                }
+
+                final Chunk chunk2;
+                final BlockProvider blockProvider = chunkDecider != null ? chunkDecider.apply(chunkX, chunkZ) : null;
+                if (blockProvider != null) {
+                    return;
+                } else {
+                    // Use dynamic chunk
+                    chunk2 = new DynamicChunk(this, biomes, chunkX, chunkZ, false);
+                }
+                cacheChunk(chunk2);
+                if (callback != null)
+                    callback.accept(chunk2);
+            };
+
+            final boolean loaded = chunkLoader.loadChunk(this, chunkX, chunkZ, chunkC -> {
+                if (!chunkC.getData().getOrDefault("generated", true)) {
+                    r.run();
+                    return;
+                }
+                cacheChunk(chunkC);
+                if (callback != null)
+                    callback.accept(chunkC);
+            });
+
+            if (!loaded)
+                r.run();
+        }
+    }
+
+    @Override
+    public void loadChunk(int chunkX, int chunkZ, ChunkCallback callback) {
+        final Chunk chunk = getChunk(chunkX, chunkZ);
+        boolean partiallyGenerated = false;
+        if (chunk != null && !(partiallyGenerated = !chunk.getData().getOrDefault("generated", true))) {
+            // Chunk already loaded
+            if (callback != null)
+                callback.accept(chunk);
+        } else {
             // Retrieve chunk from somewhere else (file or create a new one using the ChunkGenerator)
-            retrieveChunk(chunkX, chunkZ, callback);
+            retrieveChunk(chunkX, chunkZ, callback, partiallyGenerated);
         }
     }
 
     @Override
     public void loadOptionalChunk(int chunkX, int chunkZ, ChunkCallback callback) {
         final Chunk chunk = getChunk(chunkX, chunkZ);
-        if (chunk != null) {
+        boolean partiallyGenerated = false;
+        if (chunk != null && !(partiallyGenerated = !chunk.getData().getOrDefault("generated", true))) {
             // Chunk already loaded
             if (callback != null)
                 callback.accept(chunk);
         } else {
             if (hasEnabledAutoChunkLoad()) {
                 // Load chunk from StorageLocation or with ChunkGenerator
-                retrieveChunk(chunkX, chunkZ, callback);
+                retrieveChunk(chunkX, chunkZ, callback, partiallyGenerated);
             } else {
                 // Chunk not loaded, return null
                 if (callback != null)
@@ -458,7 +505,12 @@ public class InstanceContainer extends Instance {
     }
 
     @Override
-    protected void retrieveChunk(int chunkX, int chunkZ, ChunkCallback callback) {
+    protected void retrieveChunk(int chunkX, int chunkZ, ChunkCallback callback, boolean partiallyGenerated) {
+        //the chunk exists in memory
+        if (partiallyGenerated) {
+            createChunk(chunkX, chunkZ, callback, true);
+            return;
+        }
         final boolean loaded = chunkLoader.loadChunk(this, chunkX, chunkZ, chunk -> {
             cacheChunk(chunk);
             callChunkLoadEvent(chunkX, chunkZ);
@@ -469,35 +521,39 @@ public class InstanceContainer extends Instance {
 
         if (!loaded) {
             // Not found, create a new chunk
-            createChunk(chunkX, chunkZ, callback);
+            createChunk(chunkX, chunkZ, callback, false);
         }
     }
 
     @Override
-    protected void createChunk(int chunkX, int chunkZ, ChunkCallback callback) {
-        Biome[] biomes = new Biome[Chunk.BIOME_COUNT];
-        if (chunkGenerator == null) {
-            Arrays.fill(biomes, MinecraftServer.getBiomeManager().getById(0));
-        } else {
-            chunkGenerator.fillBiomes(biomes, chunkX, chunkZ);
-        }
+    protected void createChunk(int chunkX, int chunkZ, ChunkCallback callback, boolean partiallyGenerated) {
+        BlockProvider blockProvider = null;
+        Chunk chunk;
+        if (!partiallyGenerated) {
+            Biome[] biomes = new Biome[Chunk.BIOME_COUNT];
+            if (chunkGenerator == null) {
+                Arrays.fill(biomes, MinecraftServer.getBiomeManager().getById(0));
+            } else {
+                chunkGenerator.fillBiomes(biomes, chunkX, chunkZ);
+            }
+            blockProvider = chunkDecider != null ? chunkDecider.apply(chunkX, chunkZ) : null;
+            if (blockProvider != null) {
+                // Use static chunk
+                chunk = new StaticChunk(this, biomes, chunkX, chunkZ, blockProvider);
+            } else {
+                // Use dynamic chunk
+                chunk = new DynamicChunk(this, biomes, chunkX, chunkZ, true);
+            }
 
-        final Chunk chunk;
-        final BlockProvider blockProvider = chunkDecider != null ? chunkDecider.apply(chunkX, chunkZ) : null;
-        if (blockProvider != null) {
-            // Use static chunk
-            chunk = new StaticChunk(this, biomes, chunkX, chunkZ, blockProvider);
+            cacheChunk(chunk);
         } else {
-            // Use dynamic chunk
-            chunk = new DynamicChunk(this, biomes, chunkX, chunkZ);
+            chunk = getChunk(chunkX, chunkZ);
         }
-
-        cacheChunk(chunk);
 
         if (chunkGenerator != null && blockProvider == null) {
             // Execute the chunk generator to populate the chunk
             final ChunkBatch chunkBatch = createChunkBatch(chunk);
-
+            chunkBatch.setDontReplace(partiallyGenerated);
             chunkBatch.flushChunkGenerator(chunkGenerator, callback);
         } else {
             // No chunk generator, execute the callback with the empty chunk

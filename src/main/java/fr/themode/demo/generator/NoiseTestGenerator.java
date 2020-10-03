@@ -167,12 +167,11 @@ public class NoiseTestGenerator implements ChunkGenerator {
             tree.addBlock(Block.OAK_LEAVES, -1, 4, -1);
         }
 
-        //todo improve
         @Override
         public void populateChunk(ChunkBatch batch, Chunk chunk) {
-            for (int i = -2; i < 18; i++) {
-                for (int j = -2; j < 18; j++) {
-                    if (jNoise2.getNoise(i + chunk.getChunkX() * 16, j + chunk.getChunkZ() * 16) > 0.75) {
+            for (int i = 0; i < 16; i++) {
+                for (int j = 0; j < 16; j++) {
+                    if (jNoise2.getNoise(i + chunk.getChunkX() * 16, j + chunk.getChunkZ() * 16) > 0.5) {
                         int y = getHeight(i + chunk.getChunkX() * 16, j + chunk.getChunkZ() * 16);
                         tree.build(batch, new BlockPosition(i, y, j));
                     }

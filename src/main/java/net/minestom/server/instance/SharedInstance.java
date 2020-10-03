@@ -102,13 +102,13 @@ public class SharedInstance extends Instance {
     }
 
     @Override
-    public void retrieveChunk(int chunkX, int chunkZ, ChunkCallback callback) {
-        instanceContainer.retrieveChunk(chunkX, chunkZ, callback);
+    public void retrieveChunk(int chunkX, int chunkZ, ChunkCallback callback, boolean partiallyGenerated) {
+        instanceContainer.retrieveChunk(chunkX, chunkZ, callback, partiallyGenerated);
     }
 
     @Override
-    protected void createChunk(int chunkX, int chunkZ, ChunkCallback callback) {
-        instanceContainer.createChunk(chunkX, chunkZ, callback);
+    protected void createChunk(int chunkX, int chunkZ, ChunkCallback callback, boolean partiallyGenerated) {
+        instanceContainer.createChunk(chunkX, chunkZ, callback, partiallyGenerated);
     }
 
     @Override

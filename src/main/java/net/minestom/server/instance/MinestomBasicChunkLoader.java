@@ -63,7 +63,7 @@ public class MinestomBasicChunkLoader implements IChunkLoader {
         } else {
             // Found, load from result bytes
             BinaryReader reader = new BinaryReader(bytes);
-            Chunk chunk = new DynamicChunk(instance, null, chunkX, chunkZ);
+            Chunk chunk = new DynamicChunk(instance, null, chunkX, chunkZ, true);
             chunk.readChunk(reader, callback);
             return true;
         }

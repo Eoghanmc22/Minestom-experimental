@@ -1,7 +1,6 @@
 package fr.themode.demo.generator;
 
 import lombok.Data;
-import net.minestom.server.instance.Chunk;
 import net.minestom.server.instance.batch.ChunkBatch;
 import net.minestom.server.instance.block.Block;
 import net.minestom.server.utils.BlockPosition;
@@ -16,10 +15,6 @@ public class Structure {
 
 	public void build(ChunkBatch batch, BlockPosition pos) {
 		blocks.forEach((bPos, block) -> {
-			if (bPos.getX() + pos.getX() >= Chunk.CHUNK_SIZE_X || bPos.getX() + pos.getX() < 0)
-				return;
-			if (bPos.getZ() + pos.getZ() >= Chunk.CHUNK_SIZE_Z || bPos.getZ() + pos.getZ() < 0)
-				return;
 			batch.setBlock(bPos.clone().add(pos), block);
 		});
 	}

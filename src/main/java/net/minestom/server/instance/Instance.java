@@ -234,9 +234,9 @@ public abstract class Instance implements BlockModifier, EventHandler, DataConta
      */
     public abstract void setStorageLocation(StorageLocation storageLocation);
 
-    protected abstract void retrieveChunk(int chunkX, int chunkZ, ChunkCallback callback);
+    protected abstract void retrieveChunk(int chunkX, int chunkZ, ChunkCallback callback, boolean partiallyGenerated);
 
-    protected abstract void createChunk(int chunkX, int chunkZ, ChunkCallback callback);
+    protected abstract void createChunk(int chunkX, int chunkZ, ChunkCallback callback, boolean partiallyGenerated);
 
     /**
      * When set to true, chunks will load with players moving closer

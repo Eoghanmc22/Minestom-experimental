@@ -44,7 +44,7 @@ public abstract class CustomBlock {
         return firstBreaker.getEntityId() + 1;
     }
 
-    private final short defaultBlockStateId;
+    private short defaultBlockStateId;
     private final String identifier;
 
     /**
@@ -196,6 +196,17 @@ public abstract class CustomBlock {
      */
     public short getDefaultBlockStateId() {
         return defaultBlockStateId;
+    }
+
+    /**
+     * This sets the default state the block will be in when it is set,
+     * it is possible to change this value per block using
+     * {@link BlockModifier#setSeparateBlocks(int, int, int, short, short)}
+     *
+     * @param defaultBlockStateId the default visual block id
+     */
+    public void setDefaultBlockStateId(short defaultBlockStateId) {
+        this.defaultBlockStateId = defaultBlockStateId;
     }
 
     /**

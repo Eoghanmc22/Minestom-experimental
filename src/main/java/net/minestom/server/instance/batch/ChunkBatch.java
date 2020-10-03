@@ -1,13 +1,16 @@
 package net.minestom.server.instance.batch;
 
+import lombok.Setter;
 import net.minestom.server.data.Data;
 import net.minestom.server.instance.Chunk;
 import net.minestom.server.instance.ChunkGenerator;
 import net.minestom.server.instance.ChunkPopulator;
 import net.minestom.server.instance.InstanceContainer;
 import net.minestom.server.instance.block.CustomBlock;
+import net.minestom.server.utils.MathUtils;
 import net.minestom.server.utils.block.CustomBlockUtils;
 import net.minestom.server.utils.chunk.ChunkCallback;
+import net.minestom.server.utils.chunk.ChunkUtils;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -20,11 +23,15 @@ public class ChunkBatch implements InstanceBatch {
 
     private final InstanceContainer instance;
     private final Chunk chunk;
+    @Setter
+    private boolean dontReplace = false;
 
     // Give it the max capacity by default (avoid resizing)
     private final List<BlockData> dataList =
             Collections.synchronizedList(new ArrayList<>(
                     Chunk.CHUNK_SIZE_X * Chunk.CHUNK_SIZE_Y * Chunk.CHUNK_SIZE_Z));
+
+    private final ArrayList<BlockData> outsideData = new ArrayList<>();
 
     public ChunkBatch(InstanceContainer instance, Chunk chunk) {
         this.instance = instance;
@@ -56,8 +63,12 @@ public class ChunkBatch implements InstanceBatch {
         blockData.blockStateId = blockStateId;
         blockData.customBlockId = customBlockId;
         blockData.data = data;
+        blockData.dontReplace = dontReplace;
 
-        this.dataList.add(blockData);
+        if ((x < 0 || x >= Chunk.CHUNK_SIZE_X) || (z < 0 || z >= Chunk.CHUNK_SIZE_Z)) {
+            this.outsideData.add(blockData);
+        } else
+            this.dataList.add(blockData);
     }
 
     public void flushChunkGenerator(ChunkGenerator chunkGenerator, ChunkCallback callback) {
@@ -119,9 +130,22 @@ public class ChunkBatch implements InstanceBatch {
                 for (BlockData data : dataList) {
                     data.apply(chunk);
                 }
+                ArrayList<Chunk> outsideChunks = new ArrayList<>();
+                for (BlockData data : outsideData) {
+                    instance.getTempChunk(ChunkUtils.getChunkCoordinate(this.chunk.getChunkX() * 16 + data.x),
+                            ChunkUtils.getChunkCoordinate(this.chunk.getChunkZ() * 16 + data.z), chunk -> {
+                                data.apply(chunk);
+                                outsideChunks.add(chunk);
+                            });
+                }
 
                 // Refresh chunk for viewers
                 chunk.sendChunkUpdate();
+                for (final Chunk chunk : outsideChunks) {
+                    chunk.sendChunkUpdate();
+                    if (chunk.getViewers().isEmpty())
+                        instance.unloadChunk(chunk);
+                }
 
                 if (callback != null) {
                     if (safeCallback) {
@@ -140,9 +164,12 @@ public class ChunkBatch implements InstanceBatch {
         private short blockStateId;
         private short customBlockId;
         private Data data;
+        private boolean dontReplace;
 
         public void apply(Chunk chunk) {
-            chunk.setBlock(x, y, z, blockStateId, customBlockId, data, CustomBlockUtils.hasUpdate(customBlockId));
+            if (dontReplace && chunk.getBlockStateId((int) MathUtils.mod(x, Chunk.CHUNK_SIZE_X), y, (int) MathUtils.mod(z, Chunk.CHUNK_SIZE_Z)) != 0)
+                return;
+            chunk.setBlock((int) MathUtils.mod(x, Chunk.CHUNK_SIZE_X), y, (int) MathUtils.mod(z, Chunk.CHUNK_SIZE_Z), blockStateId, customBlockId, data, CustomBlockUtils.hasUpdate(customBlockId));
         }
 
     }

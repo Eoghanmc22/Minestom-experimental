@@ -29,6 +29,7 @@ import net.minestom.server.item.Material;
 import net.minestom.server.item.metadata.MapMeta;
 import net.minestom.server.network.ConnectionManager;
 import net.minestom.server.ping.ResponseDataConsumer;
+import net.minestom.server.resourcepack.ResourcePack;
 import net.minestom.server.scoreboard.Sidebar;
 import net.minestom.server.storage.StorageLocation;
 import net.minestom.server.storage.StorageOptions;
@@ -39,11 +40,20 @@ import net.minestom.server.utils.Vector;
 import net.minestom.server.utils.time.TimeUnit;
 import net.minestom.server.world.DimensionType;
 
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.math.BigInteger;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class PlayerInit {
-    private static volatile InstanceContainer instanceContainer;
+
+    public static volatile InstanceContainer instanceContainer;
 
     private static volatile Inventory inventory;
 
@@ -74,6 +84,17 @@ public class PlayerInit {
     }
 
     public static void init() {
+        //todo fix hashing its broken half the time
+        String hash = String.valueOf(ThreadLocalRandom.current().nextLong());
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA1");
+            InputStream in = new DigestInputStream(new FileInputStream("pack.zip"), digest);
+            in.readAllBytes();
+            hash = new BigInteger(digest.digest()).toString(16);
+        } catch (NoSuchAlgorithmException | IOException e) {
+            e.printStackTrace();
+        }
+        ResourcePack resourcePack = new ResourcePack("http://192.168.1.18:8000/resources.zip", hash.substring(0, 40));
         ConnectionManager connectionManager = MinecraftServer.getConnectionManager();
         BenchmarkManager benchmarkManager = MinecraftServer.getBenchmarkManager();
 
@@ -261,6 +282,7 @@ public class PlayerInit {
             });
 
             player.addEventCallback(PlayerSpawnEvent.class, event -> {
+                player.setResourcePack(resourcePack);
                 player.setGameMode(GameMode.CREATIVE);
                 player.teleport(new Position(0, 73f, 0));
 
@@ -335,7 +357,6 @@ public class PlayerInit {
 
                 //player.sendLegacyMessage("&aIm &bHere", '&');
                 //player.sendMessage(ColoredText.of("{#ff55ff}" + ChatColor.RESET + "test"));
-
             });
 
             player.addEventCallback(PlayerRespawnEvent.class, event -> {
@@ -379,7 +400,7 @@ public class PlayerInit {
 
                 // Unload the chunk (save memory) if it has no remaining viewer
                 if (chunk.getViewers().isEmpty()) {
-                    //player.getInstance().unloadChunk(chunk);
+                    player.getInstance().unloadChunk(chunk);
                 }
             });
 

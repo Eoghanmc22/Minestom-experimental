@@ -2,9 +2,13 @@ package net.minestom.server.instance;
 
 import io.netty.buffer.ByteBuf;
 import it.unimi.dsi.fastutil.ints.*;
+import lombok.Getter;
+import lombok.Setter;
 import net.minestom.server.MinecraftServer;
 import net.minestom.server.Viewable;
 import net.minestom.server.data.Data;
+import net.minestom.server.data.SerializableData;
+import net.minestom.server.data.SerializableDataImpl;
 import net.minestom.server.entity.Player;
 import net.minestom.server.entity.pathfinding.PFColumnarSpace;
 import net.minestom.server.event.player.PlayerChunkLoadEvent;
@@ -74,6 +78,9 @@ public abstract class Chunk implements Viewable {
     protected volatile boolean loaded = true;
     protected Set<Player> viewers = new CopyOnWriteArraySet<>();
     protected ByteBuf fullDataPacket;
+    @Getter
+    @Setter
+    protected SerializableData data = new SerializableDataImpl();
 
     public Chunk(Instance instance, Biome[] biomes, int chunkX, int chunkZ) {
         this.instance = instance;
