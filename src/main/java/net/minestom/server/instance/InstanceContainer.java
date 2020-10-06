@@ -424,8 +424,8 @@ public class InstanceContainer extends Instance {
     @Override
     public void loadChunk(int chunkX, int chunkZ, ChunkCallback callback) {
         final Chunk chunk = getChunk(chunkX, chunkZ);
-        boolean partiallyGenerated = false;
-        if (chunk != null && !(partiallyGenerated = !chunk.isGenerated())) {
+        boolean partiallyGenerated = chunk != null && chunk.isGenerated();
+        if (chunk != null && chunk.isGenerated()) {
             // Chunk already loaded
             if (callback != null)
                 callback.accept(chunk);
@@ -438,8 +438,8 @@ public class InstanceContainer extends Instance {
     @Override
     public void loadOptionalChunk(int chunkX, int chunkZ, ChunkCallback callback) {
         final Chunk chunk = getChunk(chunkX, chunkZ);
-        boolean partiallyGenerated = false;
-        if (chunk != null && !(partiallyGenerated = !chunk.isGenerated())) {
+        boolean partiallyGenerated = chunk != null && chunk.isGenerated();
+        if (chunk != null && chunk.isGenerated()) {
             // Chunk already loaded
             if (callback != null)
                 callback.accept(chunk);

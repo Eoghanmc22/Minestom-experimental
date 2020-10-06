@@ -25,7 +25,6 @@ import net.minestom.server.world.biomes.Biome;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.HashSet;
 
 public class DynamicChunk extends Chunk {
 
@@ -293,19 +292,17 @@ public class DynamicChunk extends Chunk {
 
         ChunkBatch chunkBatch = instance.createChunkBatch(this);
         try {
-			reader.mark(4);
 			final int version = reader.readInteger();
 			final boolean latestStructure = version == DATA_FORMAT_VERSION;
 			if (!latestStructure) {
-				// Incorrect data format version
-				reader.reset();
-			}
+                // Incorrect data format version
+                //Todo convert
+                throw new RuntimeException("Unsupported data format");
+            }
 			boolean latestIds = true;
-			if (latestStructure) {
 				final int protocolVersion = reader.readInteger();
 				//todo do something if incorrect version
 				latestIds = protocolVersion == MinecraftServer.PROTOCOL_VERSION;
-			}
 
 			// Get if the chunk has data indexes (used for chunk & blocks data)
 			final boolean hasDataIndex = reader.readBoolean();
@@ -320,7 +317,6 @@ public class DynamicChunk extends Chunk {
 				this.biomes[i] = biome != null ? biome : Biome.PLAINS;
 			}
 
-			if (latestStructure) {
 				setPopulated(reader.readBoolean());
 				setGenerated(reader.readBoolean());
 				boolean hasChunkData = reader.readBoolean();
@@ -329,7 +325,6 @@ public class DynamicChunk extends Chunk {
 					data = new SerializableDataImpl();
 					((SerializableDataImpl) data).readIndexedSerializedData(reader);
 				}
-			}
             while (true) {
                 // Position
                 final short index = reader.readShort();
