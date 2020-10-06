@@ -18,7 +18,6 @@ import net.minestom.server.utils.chunk.ChunkCallback;
 import net.minestom.server.utils.chunk.ChunkUtils;
 import net.minestom.server.world.biomes.Biome;
 
-import java.io.IOException;
 import java.util.HashSet;
 
 public class DynamicChunk extends Chunk {
@@ -252,18 +251,20 @@ public class DynamicChunk extends Chunk {
 
 			for (int i = 0; i < BIOME_COUNT; i++) {
 				final byte id = reader.readByte();
-				this.biomes[i] = BIOME_MANAGER.getById(id);
+				final Biome biome = BIOME_MANAGER.getById(id);
+				this.biomes[i] = biome != null ? biome : Biome.PLAINS;
 			}
 
-			setPopulated(reader.readBoolean());
-			setGenerated(reader.readBoolean());
-			boolean hasChunkData = reader.readBoolean();
+			if (latestStructure) {
+				setPopulated(reader.readBoolean());
+				setGenerated(reader.readBoolean());
+				boolean hasChunkData = reader.readBoolean();
 
-			if (latestStructure && hasChunkData) {
-				data = new SerializableDataImpl();
-				((SerializableDataImpl) data).readIndexedSerializedData(reader);
+				if (hasChunkData) {
+					data = new SerializableDataImpl();
+					((SerializableDataImpl) data).readIndexedSerializedData(reader);
+				}
 			}
-
 			while (true) {
 				// Position
 				final short index = reader.readShort();
@@ -280,7 +281,7 @@ public class DynamicChunk extends Chunk {
 				{
 					final boolean hasBlockData = reader.readBoolean();
 					// Data deserializer
-					if (hasBlockData) {
+					if (hasBlockData && hasDataIndex) {
 						// Read the data with the deserialized index map
 						data = new SerializableDataImpl();
 						data.readSerializedData(reader, typeToIndexMap);
@@ -293,7 +294,7 @@ public class DynamicChunk extends Chunk {
 					chunkBatch.setBlockStateId(x, y, z, blockStateId, data);
 				}
 			}
-		} catch (IndexOutOfBoundsException | IOException e) {
+		} catch (IndexOutOfBoundsException e) {
 			// Finished reading
 		}
 

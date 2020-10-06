@@ -306,4 +306,5 @@ public class BinaryWriter extends OutputStream {
     public void write(int b) {
         writeByte((byte) b);
     }
+
 }

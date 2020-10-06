@@ -128,4 +128,15 @@ public class BinaryReader extends InputStream {
     public NBT readTag() throws IOException, NBTException {
         return nbtReader.read();
     }
+
+    @Override
+    public void mark(int readlimit) {
+        getBuffer().markReaderIndex();
+    }
+
+    @Override
+    public void reset() {
+        getBuffer().resetReaderIndex();
+    }
+
 }
