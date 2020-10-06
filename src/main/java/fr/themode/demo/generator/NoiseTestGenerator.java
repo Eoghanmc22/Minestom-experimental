@@ -171,7 +171,7 @@ public class NoiseTestGenerator implements ChunkGenerator {
         public void populateChunk(ChunkBatch batch, Chunk chunk) {
             for (int i = 0; i < 16; i++) {
                 for (int j = 0; j < 16; j++) {
-                    if (jNoise2.getNoise(i + chunk.getChunkX() * 16, j + chunk.getChunkZ() * 16) > 0.5) {
+                    if (jNoise2.getNoise(i + chunk.getChunkX() * 16, j + chunk.getChunkZ() * 16) > 0.75) {
                         int y = getHeight(i + chunk.getChunkX() * 16, j + chunk.getChunkZ() * 16);
                         tree.build(batch, new BlockPosition(i, y, j));
                     }

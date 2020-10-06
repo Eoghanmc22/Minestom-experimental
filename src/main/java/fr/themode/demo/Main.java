@@ -8,13 +8,10 @@ import net.minestom.server.MinecraftServer;
 import net.minestom.server.command.CommandManager;
 import net.minestom.server.instance.block.BlockManager;
 import net.minestom.server.instance.block.rule.vanilla.RedstonePlacementRule;
-import net.minestom.server.resourcepack.ResourcePackManager;
 import net.minestom.server.storage.StorageManager;
 import net.minestom.server.storage.systems.FileStorageSystem;
 import net.minestom.server.utils.time.TimeUnit;
 import net.minestom.server.utils.time.UpdateOption;
-
-import java.io.File;
 
 
 public class Main {
@@ -23,14 +20,7 @@ public class Main {
         MinecraftServer minecraftServer = MinecraftServer.init();
 
         BlockManager blockManager = MinecraftServer.getBlockManager();
-        ResourcePackManager resourcePackManager = new ResourcePackManager();
-        final StoneBlock stoneBlock = new StoneBlock();
-        resourcePackManager.bindModelToBlock(stoneBlock, null, new File("res/test.json"));
-        resourcePackManager.addTextures(new File("res/texture_0.png"), new File("res/texture_1.png"),
-                new File("res/texture_2.png"), new File("res/texture_3.png"));
-        //More blocks ...
-        resourcePackManager.compile();
-        blockManager.registerCustomBlock(stoneBlock);
+        blockManager.registerCustomBlock(new StoneBlock());
         blockManager.registerCustomBlock(new UpdatableBlockDemo());
         blockManager.registerCustomBlock(new BurningTorchBlock());
 
