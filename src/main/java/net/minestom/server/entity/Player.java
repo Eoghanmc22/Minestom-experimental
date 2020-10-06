@@ -4,6 +4,7 @@ import net.minestom.server.MinecraftServer;
 import net.minestom.server.attribute.Attribute;
 import net.minestom.server.chat.ChatParser;
 import net.minestom.server.chat.ColoredText;
+import net.minestom.server.chat.JsonMessage;
 import net.minestom.server.chat.RichMessage;
 import net.minestom.server.collision.BoundingBox;
 import net.minestom.server.command.CommandManager;
@@ -661,19 +662,11 @@ public class Player extends LivingEntity implements CommandSender {
     /**
      * Send a message to the player
      *
-     * @param coloredText the text to send
+     * @param message the message to send,
+     *                you can use {@link ColoredText} and/or {@link RichMessage} to create it easily
      */
-    public void sendMessage(ColoredText coloredText) {
-        sendJsonMessage(coloredText.toString());
-    }
-
-    /**
-     * Send a rich message to the player
-     *
-     * @param richMessage the rich text to send
-     */
-    public void sendMessage(RichMessage richMessage) {
-        sendJsonMessage(richMessage.toString());
+    public void sendMessage(JsonMessage message) {
+        sendJsonMessage(message.toString());
     }
 
     /**
@@ -1792,6 +1785,10 @@ public class Player extends LivingEntity implements CommandSender {
         return vehicleInformation;
     }
 
+    /**
+     * Send to the player a {@link PlayerAbilitiesPacket} with all the updated fields
+     * (walkingSpeed set to 0.1)
+     */
     protected void refreshAbilities() {
         PlayerAbilitiesPacket playerAbilitiesPacket = new PlayerAbilitiesPacket();
         playerAbilitiesPacket.invulnerable = invulnerable;

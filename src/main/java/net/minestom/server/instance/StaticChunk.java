@@ -9,7 +9,8 @@ import net.minestom.server.utils.chunk.ChunkCallback;
 import net.minestom.server.utils.chunk.ChunkUtils;
 import net.minestom.server.world.biomes.Biome;
 
-import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.HashSet;
+import java.util.Set;
 
 public class StaticChunk extends Chunk {
 
@@ -21,7 +22,12 @@ public class StaticChunk extends Chunk {
     }
 
     @Override
-    public void setBlock(int x, int y, int z, short blockStateId, short customBlockId, Data data, boolean updatable) {
+    public void UNSAFE_setBlock(int x, int y, int z, short blockStateId, short customBlockId, Data data, boolean updatable) {
+        //noop
+    }
+
+    @Override
+    public void tick(long time, Instance instance) {
         //noop
     }
 
@@ -44,6 +50,21 @@ public class StaticChunk extends Chunk {
     @Override
     protected void refreshBlockStateId(int x, int y, int z, short blockStateId) {
         //noop
+    }
+
+    @Override
+    public Data getBlockData(int index) {
+        return null;
+    }
+
+    @Override
+    public void setBlockData(int x, int y, int z, Data data) {
+        //noop
+    }
+
+    @Override
+    public Set<Integer> getBlockEntities() {
+        return new HashSet<>();
     }
 
     @Override
@@ -71,8 +92,8 @@ public class StaticChunk extends Chunk {
         }
         fullDataPacket.blocksStateId = blocksStateId;
         fullDataPacket.customBlocksId = new short[0];
-        fullDataPacket.blockEntities = new CopyOnWriteArraySet<>(blockEntities);
-        fullDataPacket.blocksData = new Int2ObjectOpenHashMap<>(blocksData);
+        fullDataPacket.blockEntities = new HashSet<>();
+        fullDataPacket.blocksData = new Int2ObjectOpenHashMap<>();
         return fullDataPacket;
     }
 

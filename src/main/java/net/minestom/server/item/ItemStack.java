@@ -324,6 +324,20 @@ public class ItemStack implements DataContainer {
     }
 
     /**
+     * Get the {@link ItemAttribute} with the specified internal name
+     *
+     * @param internalName the internal name of the attribute
+     * @return the {@link ItemAttribute} with the internal name, null if not found
+     */
+    public ItemAttribute getAttribute(String internalName) {
+        for (ItemAttribute itemAttribute : attributes) {
+            if (itemAttribute.getInternalName().equals(internalName))
+                return itemAttribute;
+        }
+        return null;
+    }
+
+    /**
      * Add an attribute to the item
      *
      * @param itemAttribute the attribute to add
@@ -460,10 +474,15 @@ public class ItemStack implements DataContainer {
      * @return true if the item has nbt tag, false otherwise
      */
     public boolean hasNbtTag() {
-        return hasDisplayName() || hasLore() || damage != 0 || isUnbreakable() ||
+        return hasDisplayName() ||
+                hasLore() ||
+                damage != 0 ||
+                isUnbreakable() ||
                 !enchantmentMap.isEmpty() ||
                 !attributes.isEmpty() ||
-                hideFlag != 0 || customModelData != 0 || (itemMeta != null && itemMeta.hasNbt());
+                hideFlag != 0 ||
+                customModelData != 0 ||
+                (itemMeta != null && itemMeta.hasNbt());
     }
 
     /**

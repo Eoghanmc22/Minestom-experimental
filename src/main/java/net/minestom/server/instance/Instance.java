@@ -33,10 +33,8 @@ import net.minestom.server.world.DimensionType;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.function.Consumer;
-import java.util.stream.Stream;
 
 /**
  * Instances are what are called "worlds" in Minecraft
@@ -64,7 +62,7 @@ public abstract class Instance implements BlockModifier, EventHandler, DataConta
     private UpdateOption timeUpdate = new UpdateOption(1, TimeUnit.TICK);
     private long lastTimeUpdate;
 
-    private final Map<Class<? extends Event>, List<EventCallback>> eventCallbacks = new ConcurrentHashMap<>();
+    private final Map<Class<? extends Event>, Collection<EventCallback>> eventCallbacks = new ConcurrentHashMap<>();
 
     // Entities present in this instance
     protected final Set<Entity> entities = new CopyOnWriteArraySet<>();
@@ -160,7 +158,9 @@ public abstract class Instance implements BlockModifier, EventHandler, DataConta
     public abstract void unloadChunk(Chunk chunk);
 
     /**
-     * Get the specified {@link Chunk}
+     * Get the loaded {@link Chunk} at a position.
+     * <p>
+     * WARNING: this should only return already-loaded chunk, use {@link #loadChunk(int, int)} or similar to load one instead.
      *
      * @param chunkX the chunk X
      * @param chunkZ the chunk Z
@@ -169,7 +169,7 @@ public abstract class Instance implements BlockModifier, EventHandler, DataConta
     public abstract Chunk getChunk(int chunkX, int chunkZ);
 
     /**
-     * Save a {@link Chunk}
+     * Save a {@link Chunk} to permanent storage
      *
      * @param chunk    the {@link Chunk} to save
      * @param callback called when the {@link Chunk} is done saving
@@ -177,7 +177,7 @@ public abstract class Instance implements BlockModifier, EventHandler, DataConta
     public abstract void saveChunkToStorage(Chunk chunk, Runnable callback);
 
     /**
-     * Save multiple chunks
+     * Save multiple chunks to permanent storage
      *
      * @param callback called when the chunks are done saving
      */
@@ -234,8 +234,27 @@ public abstract class Instance implements BlockModifier, EventHandler, DataConta
      */
     public abstract void setStorageLocation(StorageLocation storageLocation);
 
+    /**
+     * Used when a {@link Chunk} is not currently loaded in memory and need to be retrieved from somewhere else.
+     * Could be read from disk, or generated from scratch
+     * <p>
+     * WARNING: it has to retrieve a chunk, this is not optional.
+     *
+     * @param chunkX   the chunk X
+     * @param chunkZ   the chunk X
+     * @param callback the callback executed once the {@link Chunk} has been retrieved
+     */
     protected abstract void retrieveChunk(int chunkX, int chunkZ, ChunkCallback callback, boolean partiallyGenerated);
 
+    /**
+     * Called to generated a new {@link Chunk} from scratch.
+     * <p>
+     * This is where you can put your chunk generation code.
+     *
+     * @param chunkX   the chunk X
+     * @param chunkZ   the chunk Z
+     * @param callback the callback executed with the newly created {@link Chunk}
+     */
     protected abstract void createChunk(int chunkX, int chunkZ, ChunkCallback callback, boolean partiallyGenerated);
 
     /**
@@ -517,6 +536,12 @@ public abstract class Instance implements BlockModifier, EventHandler, DataConta
         loadChunk(chunkX, chunkZ, callback);
     }
 
+    /**
+     * Load chunk (if {@link #hasEnabledAutoChunkLoad()} returns true) at the given position with a callback
+     *
+     * @param position the chunk position
+     * @param callback the callback executed when the chunk is loaded (or with a null chunk if not)
+     */
     public void loadOptionalChunk(Position position, ChunkCallback callback) {
         final int chunkX = ChunkUtils.getChunkCoordinate((int) position.getX());
         final int chunkZ = ChunkUtils.getChunkCoordinate((int) position.getZ());
@@ -601,7 +626,7 @@ public abstract class Instance implements BlockModifier, EventHandler, DataConta
      * @param blockPosition the block position
      * @param actionId
      * @param actionParam
-     * @see <a href="https://wiki.vg/Protocol#Block_Action">Packet information</a> for the action id &amp; param
+     * @see <a href="https://wiki.vg/Protocol#Block_Action">BlockActionPacket</a> for the action id &amp; param
      */
     public void sendBlockAction(BlockPosition blockPosition, byte actionId, byte actionParam) {
         final short blockStateId = getBlockStateId(blockPosition);
@@ -628,7 +653,8 @@ public abstract class Instance implements BlockModifier, EventHandler, DataConta
     public Data getBlockData(int x, int y, int z) {
         final Chunk chunk = getChunkAt(x, z);
         Check.notNull(chunk, "The chunk at " + x + ":" + z + " is not loaded");
-        return chunk.getBlockData(x, (byte) y, z);
+        final int index = ChunkUtils.getBlockIndex(x, y, z);
+        return chunk.getBlockData(index);
     }
 
     /**
@@ -668,7 +694,7 @@ public abstract class Instance implements BlockModifier, EventHandler, DataConta
     }
 
     /**
-     * Get the chunk at the given {@link BlockPosition}, null if not loaded
+     * Get the chunk at the given {@link BlockPosition}, null if not loaded.
      *
      * @param x the X position
      * @param z the Z position
@@ -747,25 +773,8 @@ public abstract class Instance implements BlockModifier, EventHandler, DataConta
     }
 
     @Override
-    public <E extends Event> void addEventCallback(Class<E> eventClass, EventCallback<E> eventCallback) {
-        List<EventCallback> callbacks = getEventCallbacks(eventClass);
-        callbacks.add(eventCallback);
-    }
-
-    @Override
-    public <E extends Event> void removeEventCallback(Class<E> eventClass, EventCallback<E> eventCallback) {
-        List<EventCallback> callbacks = getEventCallbacks(eventClass);
-        callbacks.remove(eventCallback);
-    }
-
-    @Override
-    public <E extends Event> List<EventCallback> getEventCallbacks(Class<E> eventClass) {
-        return eventCallbacks.computeIfAbsent(eventClass, clazz -> new CopyOnWriteArrayList<>());
-    }
-
-    @Override
-    public Stream<EventCallback> getEventCallbacks() {
-        return eventCallbacks.values().stream().flatMap(Collection::stream);
+    public Map<Class<? extends Event>, Collection<EventCallback>> getEventCallbacksMap() {
+        return eventCallbacks;
     }
 
     // UNSAFE METHODS (need most of time to be synchronized)
@@ -964,17 +973,16 @@ public abstract class Instance implements BlockModifier, EventHandler, DataConta
      * Creates an explosion at the given position with the given strength.
      * The algorithm used to compute damages is provided by {@link #getExplosionSupplier()}.
      *
-     * @param centerX
-     * @param centerY
-     * @param centerZ
-     * @param strength
+     * @param centerX        center X of the explosion
+     * @param centerY        center Y of the explosion
+     * @param centerZ        center Z of the explosion
+     * @param strength       the strength of the explosion
      * @param additionalData data to pass to the explosion supplier
      * @throws IllegalStateException If no {@link ExplosionSupplier} was supplied
      */
     public void explode(float centerX, float centerY, float centerZ, float strength, Data additionalData) {
         final ExplosionSupplier explosionSupplier = getExplosionSupplier();
-        if (explosionSupplier == null)
-            throw new IllegalStateException("Tried to create an explosion with no explosion supplier");
+        Check.stateCondition(explosionSupplier == null, "Tried to create an explosion with no explosion supplier");
         final Explosion explosion = explosionSupplier.createExplosion(centerX, centerY, centerZ, strength, additionalData);
         explosion.apply(this);
     }
@@ -989,7 +997,7 @@ public abstract class Instance implements BlockModifier, EventHandler, DataConta
     }
 
     /**
-     * Registers the explosion supplier to use in this instance
+     * Registers the {@link ExplosionSupplier} to use in this instance
      *
      * @param supplier the explosion supplier
      */

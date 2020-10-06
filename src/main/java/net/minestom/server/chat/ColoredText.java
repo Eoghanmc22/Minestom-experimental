@@ -10,82 +10,86 @@ import java.util.regex.Pattern;
 
 /**
  * Represent a text with one or multiple colors
+ * <p>
+ * Used when the message can contain colors but not events like in {@link RichMessage}
  */
-public class ColoredText {
+public class ColoredText extends JsonMessage {
 
     // the raw text
     private String message;
-
-    // true if the compiled string is up-to-date, false otherwise
-    private boolean updated;
-    // the compiled json string of this colored text (can be outdated)
-    private String compiledJson;
 
     private ColoredText(String message) {
         this.message = message;
         refreshUpdate();
     }
 
+    /**
+     * Create a {@link ColoredText}
+     *
+     * @param color   the text color
+     * @param message the text message
+     * @return the created {@link ColoredText}
+     */
     public static ColoredText of(ChatColor color, String message) {
         return new ColoredText(color + message);
     }
 
+    /**
+     * Create a {@link ColoredText}
+     *
+     * @param message the text message
+     * @return the created {@link ColoredText}
+     */
     public static ColoredText of(String message) {
         return of(ChatColor.WHITE, message);
     }
 
-    public static ColoredText ofFormat(String message) {
-        return new ColoredText(message);
-    }
-
+    /**
+     * Create a {@link ColoredText} with a legacy text
+     *
+     * @param message   the text message
+     * @param colorChar the char used before the color code
+     * @return the created {@link ColoredText}
+     */
     public static ColoredText ofLegacy(String message, char colorChar) {
         String legacy = toLegacy(message, colorChar);
 
-        return ofFormat(legacy);
+        return of(legacy);
     }
 
+    /**
+     * Append the text
+     *
+     * @param color   the text color
+     * @param message the text message
+     * @return this {@link ColoredText}
+     */
     public ColoredText append(ChatColor color, String message) {
         this.message += color + message;
         refreshUpdate();
         return this;
     }
 
+    /**
+     * Append the text
+     *
+     * @param message the text message
+     * @return this {@link ColoredText}
+     */
     public ColoredText append(String message) {
         return append(ChatColor.NO_COLOR, message);
     }
 
-    public ColoredText appendFormat(String message) {
-        this.message += message;
-        refreshUpdate();
-        return this;
-    }
-
-    private static String toLegacy(String message, char colorChar) {
-        StringBuilder result = new StringBuilder();
-
-        for (int i = 0; i < message.length(); i++) {
-            final char c = message.charAt(i);
-            if (c == colorChar) {
-                final char nextChar = message.charAt(i + 1);
-                final ChatColor color = ChatColor.fromLegacyColorCodes(nextChar);
-                if (color != ChatColor.NO_COLOR) {
-                    final String replacement = color.toString();
-                    result.append(replacement);
-                    i++; // Increment to ignore the color code
-                } else {
-                    result.append(c);
-                }
-            } else {
-                result.append(c);
-            }
-        }
-
-        return result.toString();
-    }
-
+    /**
+     * Add legacy text
+     *
+     * @param message   the legacy text
+     * @param colorChar the char used before the color code
+     * @return this {@link ColoredText}
+     */
     public ColoredText appendLegacy(String message, char colorChar) {
-        String legacy = toLegacy(message, colorChar);
-        return appendFormat(legacy);
+        final String legacy = toLegacy(message, colorChar);
+        return of(legacy);
     }
 
     /**
@@ -98,27 +102,13 @@ public class ColoredText {
     }
 
     /**
-     * Compile this text and cache it for further execution
-     *
-     * @return the raw json string of this colored text
-     */
-    @Override
-    public String toString() {
-        if (!updated) {
-            this.compiledJson = getJsonObject().toString();
-            this.updated = true;
-        }
-
-        return compiledJson;
-    }
-
-    /**
      * Get the Json representation of this colored text
      * <p>
      * Used to send a message
      *
      * @return the Json representation of the text
      */
+    @Override
     public JsonObject getJsonObject() {
         final List<JsonObject> components = getComponents();
 
@@ -169,7 +159,7 @@ public class ColoredText {
             if ((p == null || (p != '/')) && c == '{' && !inFormat) {
 
                 formatEnd = formatEnd > 0 ? formatEnd + 1 : formatEnd;
-                String rawMessage = message.substring(formatEnd, i);
+                final String rawMessage = message.substring(formatEnd, i);
                 if (!rawMessage.isEmpty()) {
                     objects.add(getMessagePart(MessageType.RAW, rawMessage, currentColor, specialComponentContainer));
                 }
@@ -179,7 +169,7 @@ public class ColoredText {
                 continue;
             } else if ((p == null || (p != '/')) && c == '}' && inFormat) {
                 // Represent the custom format between the brackets
-                String formatString = message.substring(formatStart + 1, i);
+                final String formatString = message.substring(formatStart + 1, i);
                 if (formatString.isEmpty())
                     continue;
 
@@ -223,6 +213,8 @@ public class ColoredText {
                     final String translatableCode = formatString.substring(1);
                     final boolean hasArgs = translatableCode.contains(",");
                     if (!hasArgs) {
+                        // Without argument
+                        // ex: {@translatable.key}
                         objects.add(getMessagePart(MessageType.TRANSLATABLE, translatableCode, currentColor, specialComponentContainer));
                     } else {
                         // Arguments parsing
@@ -245,6 +237,7 @@ public class ColoredText {
                 }
                 // Keybind component
                 if (formatString.startsWith("&")) {
+                    // ex: {&key.drop}
                     final String keybindCode = formatString.substring(1);
                     objects.add(getMessagePart(MessageType.KEYBIND, keybindCode, currentColor, specialComponentContainer));
                     continue;
@@ -301,14 +294,48 @@ public class ColoredText {
         return value ? "true" : "false";
     }
 
-    private void refreshUpdate() {
-        this.updated = false;
+    /**
+     * Convert a legacy text to our format which can be used by {@link #of(String)} etc...
+     * <p>
+     * eg: "&fHey" -> "{#white}Hey"
+     *
+     * @param message   the legacy text
+     * @param colorChar the char used before the color code
+     * @return the converted legacy text
+     */
+    private static String toLegacy(String message, char colorChar) {
+        StringBuilder result = new StringBuilder();
+
+        for (int i = 0; i < message.length(); i++) {
+            final char c = message.charAt(i);
+            if (c == colorChar) {
+                final char nextChar = message.charAt(i + 1);
+                final ChatColor color = ChatColor.fromLegacyColorCodes(nextChar);
+                if (color != ChatColor.NO_COLOR) {
+                    final String replacement = color.toString();
+                    result.append(replacement);
+                    i++; // Increment to ignore the color code
+                } else {
+                    result.append(c);
+                }
+            } else {
+                result.append(c);
+            }
+        }
+
+        return result.toString();
     }
 
+    /**
+     * Represents an element which can change based on the client which receive the text
+     */
     private enum MessageType {
         RAW, KEYBIND, TRANSLATABLE
     }
 
+    /**
+     * Used to keep a "color" state in the text
+     */
     private static class SpecialComponentContainer {
         boolean bold = false;
 

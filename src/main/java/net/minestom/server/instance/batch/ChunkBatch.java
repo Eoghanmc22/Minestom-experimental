@@ -75,7 +75,7 @@ public class ChunkBatch implements InstanceBatch {
     }
 
     public void flushChunkGenerator(ChunkGenerator chunkGenerator, ChunkCallback callback) {
-        batchesPool.execute(() -> {
+        BLOCK_BATCH_POOL.execute(() -> {
             final List<ChunkPopulator> populators = chunkGenerator.getPopulators();
             final boolean hasPopulator = populators != null && !populators.isEmpty();
 
@@ -102,7 +102,7 @@ public class ChunkBatch implements InstanceBatch {
      * @param callback the callback to execute once the blocks are placed
      */
     public void flush(ChunkCallback callback) {
-        batchesPool.execute(() -> singleThreadFlush(callback, true));
+        BLOCK_BATCH_POOL.execute(() -> singleThreadFlush(callback, true));
     }
 
     /**
@@ -111,7 +111,7 @@ public class ChunkBatch implements InstanceBatch {
      * @param callback the callback to execute once the blocks are placed
      */
     public void unsafeFlush(ChunkCallback callback) {
-        batchesPool.execute(() -> singleThreadFlush(callback, false));
+        BLOCK_BATCH_POOL.execute(() -> singleThreadFlush(callback, false));
     }
 
     public void clearData() {
@@ -179,7 +179,7 @@ public class ChunkBatch implements InstanceBatch {
         public void apply(Chunk chunk) {
             if (dontReplace && chunk.getBlockStateId((int) MathUtils.mod(x, Chunk.CHUNK_SIZE_X), y, (int) MathUtils.mod(z, Chunk.CHUNK_SIZE_Z)) != 0)
                 return;
-            chunk.setBlock((int) MathUtils.mod(x, Chunk.CHUNK_SIZE_X), y, (int) MathUtils.mod(z, Chunk.CHUNK_SIZE_Z), blockStateId, customBlockId, data, CustomBlockUtils.hasUpdate(customBlockId));
+            chunk.UNSAFE_setBlock((int) MathUtils.mod(x, Chunk.CHUNK_SIZE_X), y, (int) MathUtils.mod(z, Chunk.CHUNK_SIZE_Z), blockStateId, customBlockId, data, CustomBlockUtils.hasUpdate(customBlockId));
         }
 
     }

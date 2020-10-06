@@ -7,11 +7,15 @@ import net.minestom.server.utils.validate.Check;
 import java.util.ArrayList;
 import java.util.List;
 
+// TODO format retention
+
 /**
  * Represent multiple {@link ColoredText} batched together with the possibility to add
  * click and hover events
+ * <p>
+ * Used when the message can contain both colored text and event (otherwise, use {@link ColoredText})
  */
-public class RichMessage {
+public class RichMessage extends JsonMessage {
 
     private List<RichComponent> components = new ArrayList<>();
     private RichComponent currentComponent;
@@ -101,22 +105,8 @@ public class RichMessage {
         return append(coloredText, FormatRetention.ALL);
     }
 
-    /**
-     * Get the string representation of this json message
-     *
-     * @return the string representation of this json message
-     */
     @Override
-    public String toString() {
-        return getJsonObject().toString();
-    }
-
-    /**
-     * Get the json object representing the whole rich message
-     *
-     * @return the json representation of this rich message
-     */
-    private JsonObject getJsonObject() {
+    public JsonObject getJsonObject() {
         List<RichComponent> cacheComponents = new ArrayList<>(components);
 
         // No component, return empty json object
@@ -149,7 +139,7 @@ public class RichMessage {
     }
 
     /**
-     * Process the components to add click/hover event
+     * Process the components to add click/hover events
      *
      * @param component the rich component to process
      * @return a list of processed components

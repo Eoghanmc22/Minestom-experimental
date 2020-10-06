@@ -188,7 +188,7 @@ public class InstanceContainer extends Instance {
             }
 
             // Set the block
-            chunk.setBlock(x, y, z, blockStateId, customBlockId, data, hasUpdate);
+            chunk.UNSAFE_setBlock(x, y, z, blockStateId, customBlockId, data, hasUpdate);
 
             // Refresh neighbors since a new block has been placed
             executeNeighboursBlockPlacementRule(blockPosition);
@@ -252,7 +252,7 @@ public class InstanceContainer extends Instance {
      * WARNING {@code chunk} needs to be synchronized
      *
      * @param chunk         the chunk where the block is
-     * @param index         the index of the block
+     * @param index         the block index
      * @param blockPosition the block position
      */
     private void callBlockPlace(Chunk chunk, int index, BlockPosition blockPosition) {
