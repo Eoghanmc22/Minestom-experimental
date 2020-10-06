@@ -19,284 +19,299 @@ import net.minestom.server.utils.chunk.ChunkUtils;
 import net.minestom.server.world.biomes.Biome;
 
 import java.io.IOException;
-import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.HashSet;
 
 public class DynamicChunk extends Chunk {
 
-    // blocks id based on coordinate, see Chunk#getBlockIndex
-    // WARNING: those arrays are NOT thread-safe
-    // and modifying them can cause issue with block data, update, block entity and the cached chunk packet
-    protected final short[] blocksStateId = new short[CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z];
-    protected final short[] customBlocksId = new short[CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z];
+	private static final int DATA_FORMAT_VERSION = 2;
 
-    public DynamicChunk(Instance instance, Biome[] biomes, int chunkX, int chunkZ, boolean generated) {
-        super(instance, biomes, chunkX, chunkZ);
-        getData().set("generated", generated, Boolean.class);
-    }
+	// blocks id based on coordinate, see Chunk#getBlockIndex
+	// WARNING: those arrays are NOT thread-safe
+	// and modifying them can cause issue with block data, update, block entity and the cached chunk packet
+	protected final short[] blocksStateId = new short[CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z];
+	protected final short[] customBlocksId = new short[CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z];
 
-    @Override
-    public void setBlock(int x, int y, int z, short blockStateId, short customBlockId, Data data, boolean updatable) {
+	public DynamicChunk(Instance instance, Biome[] biomes, int chunkX, int chunkZ, boolean generated) {
+		super(instance, biomes, chunkX, chunkZ);
+		setGenerated(generated);
+	}
 
-        {
-            // Update pathfinder
-            if (columnarSpace != null) {
-                final ColumnarOcclusionFieldList columnarOcclusionFieldList = columnarSpace.occlusionFields();
-                final PFBlockDescription blockDescription = PFBlockDescription.getBlockDescription(blockStateId);
-                columnarOcclusionFieldList.onBlockChanged(x, y, z, blockDescription, 0);
-            }
-        }
+	@Override
+	public void setBlock(int x, int y, int z, short blockStateId, short customBlockId, Data data, boolean updatable) {
 
-        final int index = getBlockIndex(x, y, z);
-        // True if the block is not complete air without any custom block capabilities
-        final boolean hasBlock = blockStateId != 0 || customBlockId != 0;
-        if (hasBlock) {
-            this.blocksStateId[index] = blockStateId;
-            this.customBlocksId[index] = customBlockId;
-        } else {
-            // Block has been deleted, clear cache and return
+		{
+			// Update pathfinder
+			if (columnarSpace != null) {
+				final ColumnarOcclusionFieldList columnarOcclusionFieldList = columnarSpace.occlusionFields();
+				final PFBlockDescription blockDescription = PFBlockDescription.getBlockDescription(blockStateId);
+				columnarOcclusionFieldList.onBlockChanged(x, y, z, blockDescription, 0);
+			}
+		}
 
-            this.blocksStateId[index] = 0; // Set to air
-            this.customBlocksId[index] = 0; // Remove custom block
+		final int index = getBlockIndex(x, y, z);
+		// True if the block is not complete air without any custom block capabilities
+		final boolean hasBlock = blockStateId != 0 || customBlockId != 0;
+		if (hasBlock) {
+			this.blocksStateId[index] = blockStateId;
+			this.customBlocksId[index] = customBlockId;
+		} else {
+			// Block has been deleted, clear cache and return
 
-            this.blocksData.remove(index);
+			this.blocksStateId[index] = 0; // Set to air
+			this.customBlocksId[index] = 0; // Remove custom block
 
-            this.updatableBlocks.remove(index);
-            this.updatableBlocksLastUpdate.remove(index);
+			this.blocksData.remove(index);
 
-            this.blockEntities.remove(index);
+			this.updatableBlocks.remove(index);
+			this.updatableBlocksLastUpdate.remove(index);
 
-            this.packetUpdated = false;
-            return;
-        }
+			this.blockEntities.remove(index);
 
-        // Set the new data (or remove from the map if is null)
-        if (data != null) {
-            this.blocksData.put(index, data);
-        } else {
-            this.blocksData.remove(index);
-        }
+			this.packetUpdated = false;
+			return;
+		}
 
-        // Set update consumer
-        if (updatable) {
-            this.updatableBlocks.add(index);
-            this.updatableBlocksLastUpdate.put(index, System.currentTimeMillis());
-        } else {
-            this.updatableBlocks.remove(index);
-            this.updatableBlocksLastUpdate.remove(index);
-        }
+		// Set the new data (or remove from the map if is null)
+		if (data != null) {
+			this.blocksData.put(index, data);
+		} else {
+			this.blocksData.remove(index);
+		}
 
-        // Set block entity
-        if (isBlockEntity(blockStateId)) {
-            this.blockEntities.add(index);
-        } else {
-            this.blockEntities.remove(index);
-        }
+		// Set update consumer
+		if (updatable) {
+			this.updatableBlocks.add(index);
+			this.updatableBlocksLastUpdate.put(index, System.currentTimeMillis());
+		} else {
+			this.updatableBlocks.remove(index);
+			this.updatableBlocksLastUpdate.remove(index);
+		}
 
-        this.packetUpdated = false;
-    }
+		// Set block entity
+		if (isBlockEntity(blockStateId)) {
+			this.blockEntities.add(index);
+		} else {
+			this.blockEntities.remove(index);
+		}
 
-    @Override
-    public short getBlockStateId(int x, int y, int z) {
-        final int index = getBlockIndex(x, y, z);
-        if (!MathUtils.isBetween(index, 0, blocksStateId.length)) {
-            return 0; // TODO: custom invalid block
-        }
-        return blocksStateId[index];
-    }
+		this.packetUpdated = false;
+	}
 
-    @Override
-    public short getCustomBlockId(int x, int y, int z) {
-        final int index = getBlockIndex(x, y, z);
-        if (!MathUtils.isBetween(index, 0, blocksStateId.length)) {
-            return 0; // TODO: custom invalid block
-        }
-        return customBlocksId[index];
-    }
+	@Override
+	public short getBlockStateId(int x, int y, int z) {
+		final int index = getBlockIndex(x, y, z);
+		if (!MathUtils.isBetween(index, 0, blocksStateId.length)) {
+			return 0; // TODO: custom invalid block
+		}
+		return blocksStateId[index];
+	}
 
-    @Override
-    protected void refreshBlockValue(int x, int y, int z, short blockStateId, short customId) {
-        final int blockIndex = getBlockIndex(x, y, z);
-        if (!MathUtils.isBetween(blockIndex, 0, blocksStateId.length)) {
-            return;
-        }
+	@Override
+	public short getCustomBlockId(int x, int y, int z) {
+		final int index = getBlockIndex(x, y, z);
+		if (!MathUtils.isBetween(index, 0, blocksStateId.length)) {
+			return 0; // TODO: custom invalid block
+		}
+		return customBlocksId[index];
+	}
 
-        this.blocksStateId[blockIndex] = blockStateId;
-        this.customBlocksId[blockIndex] = customId;
-    }
+	@Override
+	protected void refreshBlockValue(int x, int y, int z, short blockStateId, short customId) {
+		final int blockIndex = getBlockIndex(x, y, z);
+		if (!MathUtils.isBetween(blockIndex, 0, blocksStateId.length)) {
+			return;
+		}
 
-    @Override
-    protected void refreshBlockStateId(int x, int y, int z, short blockStateId) {
-        final int blockIndex = getBlockIndex(x, y, z);
-        if (!MathUtils.isBetween(blockIndex, 0, blocksStateId.length)) {
-            return;
-        }
+		this.blocksStateId[blockIndex] = blockStateId;
+		this.customBlocksId[blockIndex] = customId;
+	}
 
-        this.blocksStateId[blockIndex] = blockStateId;
-    }
+	@Override
+	protected void refreshBlockStateId(int x, int y, int z, short blockStateId) {
+		final int blockIndex = getBlockIndex(x, y, z);
+		if (!MathUtils.isBetween(blockIndex, 0, blocksStateId.length)) {
+			return;
+		}
 
-    private static final int dataFormatVersion = 2;
+		this.blocksStateId[blockIndex] = blockStateId;
+	}
 
-    /**
-     * Serialize this {@link Chunk} based on {@link #readChunk(BinaryReader, ChunkCallback)}
-     * <p>
-     * It is also used by the default {@link IChunkLoader} which is {@link MinestomBasicChunkLoader}
-     *
-     * @return the serialized chunk data
-     */
-    @Override
-    public byte[] getSerializedData() {
+	/**
+	 * Serialize this {@link Chunk} based on {@link #readChunk(BinaryReader, ChunkCallback)}
+	 * <p>
+	 * It is also used by the default {@link IChunkLoader} which is {@link MinestomBasicChunkLoader}
+	 *
+	 * @return the serialized chunk data
+	 */
+	@Override
+	public byte[] getSerializedData() {
 
-        // Used for blocks data
-        Object2ShortMap<String> typeToIndexMap = new Object2ShortOpenHashMap<>();
+		// Used for blocks data
+		Object2ShortMap<String> typeToIndexMap = new Object2ShortOpenHashMap<>();
 
-        BinaryWriter binaryWriter = new BinaryWriter();
+		BinaryWriter binaryWriter = new BinaryWriter();
 
-        // Write the biomes id
-        for (int i = 0; i < BIOME_COUNT; i++) {
-            final byte id = (byte) biomes[i].getId();
-            binaryWriter.writeByte(id);
-        }
+		// Write the biomes id
+		for (int i = 0; i < BIOME_COUNT; i++) {
+			final byte id = (byte) biomes[i].getId();
+			binaryWriter.writeByte(id);
+		}
 
-        binaryWriter.writeBoolean(data != null);
-        if (data != null) {
-            binaryWriter.writeBytes(data.getSerializedData(new Object2ShortOpenHashMap<>(), true));
-        }
+		binaryWriter.writeBoolean(populated);
+		binaryWriter.writeBoolean(generated);
 
-        for (byte x = 0; x < CHUNK_SIZE_X; x++) {
-            for (short y = 0; y < CHUNK_SIZE_Y; y++) {
-                for (byte z = 0; z < CHUNK_SIZE_Z; z++) {
-                    final int index = getBlockIndex(x, y, z);
+		boolean hasChunkData = data instanceof SerializableData;
 
-                    final short blockStateId = blocksStateId[index];
-                    final short customBlockId = customBlocksId[index];
+		binaryWriter.writeBoolean(hasChunkData);
+		if (hasChunkData) {
+			binaryWriter.writeBytes(((SerializableData) data).getSerializedData(new Object2ShortOpenHashMap<>(), true));
+		}
 
-                    // No block at the position
-                    if (blockStateId == 0 && customBlockId == 0)
-                        continue;
+		for (byte x = 0; x < CHUNK_SIZE_X; x++) {
+			for (short y = 0; y < CHUNK_SIZE_Y; y++) {
+				for (byte z = 0; z < CHUNK_SIZE_Z; z++) {
+					final int index = getBlockIndex(x, y, z);
 
-                    // Chunk coordinates
-                    binaryWriter.writeShort((short) index);
+					final short blockStateId = blocksStateId[index];
+					final short customBlockId = customBlocksId[index];
 
-                    // Block ids
-                    binaryWriter.writeShort(blockStateId);
-                    binaryWriter.writeShort(customBlockId);
+					// No block at the position
+					if (blockStateId == 0 && customBlockId == 0)
+						continue;
 
-                    // Data
-                    final Data data = blocksData.get(index);
-                    final boolean hasData = data instanceof SerializableData;
-                    binaryWriter.writeBoolean(hasData);
-                    if (hasData) {
-                        // Get the un-indexed data
-                        final byte[] serializedData = ((SerializableData) data).getSerializedData(typeToIndexMap, false);
-                        binaryWriter.writeBytes(serializedData);
-                    }
-                }
-            }
-        }
+					// Chunk coordinates
+					binaryWriter.writeShort((short) index);
 
-        // If the chunk data contains SerializableData type, it needs to be added in the header
-        BinaryWriter indexWriter = new BinaryWriter();
-        final boolean hasIndex = !typeToIndexMap.isEmpty();
-        indexWriter.writeBoolean(hasIndex);
-        if (hasIndex) {
-            // Get the index buffer (prefixed by true to say that the chunk contains data indexes)
-            SerializableData.writeDataIndexHeader(indexWriter, typeToIndexMap);
-        }
+					// Block ids
+					binaryWriter.writeShort(blockStateId);
+					binaryWriter.writeShort(customBlockId);
 
-        // Add the hasIndex field & the index header if it has it
-        binaryWriter.writeAtStart(indexWriter);
+					// Data
+					final Data data = blocksData.get(index);
+					final boolean hasBlockData = data instanceof SerializableData && !data.isEmpty();
+					binaryWriter.writeBoolean(hasBlockData);
+					if (hasBlockData) {
+						// Get the un-indexed data
+						final byte[] serializedData = ((SerializableData) data).getSerializedData(typeToIndexMap, false);
+						binaryWriter.writeBytes(serializedData);
+					}
+				}
+			}
+		}
 
-        //Metadata
-        int gameVersion = MinecraftServer.PROTOCOL_VERSION;
-        BinaryWriter metadata = new BinaryWriter();
-        metadata.writeInt(dataFormatVersion);
-        metadata.writeInt(gameVersion);
-        binaryWriter.writeAtStart(metadata);
+		// If the chunk data contains SerializableData type, it needs to be added in the header
+		BinaryWriter indexWriter = new BinaryWriter();
+		final boolean hasIndex = !typeToIndexMap.isEmpty();
+		indexWriter.writeBoolean(hasIndex);
+		if (hasIndex) {
+			// Get the index buffer (prefixed by true to say that the chunk contains data indexes)
+			SerializableData.writeDataIndexHeader(indexWriter, typeToIndexMap);
+		}
 
-        return binaryWriter.toByteArray();
-    }
+		// Add the hasIndex field & the index header if it has it
+		binaryWriter.writeAtStart(indexWriter);
 
-    @Override
-    public void readChunk(BinaryReader reader, ChunkCallback callback) {
-        // Used for blocks data
-        Object2ShortMap<String> typeToIndexMap = null;
+		//Metadata
+		{
+			BinaryWriter metadata = new BinaryWriter();
+			metadata.writeInt(DATA_FORMAT_VERSION);
+			metadata.writeInt(MinecraftServer.PROTOCOL_VERSION);
+			binaryWriter.writeAtStart(metadata);
+		}
 
-        ChunkBatch chunkBatch = instance.createChunkBatch(this);
-        try {
-            reader.mark(4);
-            boolean latestStructure = reader.readInteger() == dataFormatVersion;
-            if (!latestStructure)
-                reader.reset();
-            boolean latestIds = true;
-            if (latestStructure) {
-                //todo do something if incorrect version
-                latestIds = reader.readInteger() == MinecraftServer.PROTOCOL_VERSION;
-            }
+		return binaryWriter.toByteArray();
+	}
 
-            // Get if the chunk has data indexes (used for blocks data)
-            final boolean hasIndex = reader.readBoolean();
-            if (hasIndex) {
-                // Get the data indexes which will be used to read all the individual data
-                typeToIndexMap = SerializableData.readDataIndexes(reader);
-            }
+	@Override
+	public void readChunk(BinaryReader reader, ChunkCallback callback) {
+		// Used for blocks data
+		Object2ShortMap<String> typeToIndexMap = null;
 
-            for (int i = 0; i < BIOME_COUNT; i++) {
-                final byte id = reader.readByte();
-                this.biomes[i] = BIOME_MANAGER.getById(id);
-            }
+		ChunkBatch chunkBatch = instance.createChunkBatch(this);
+		try {
+			reader.mark(4);
+			final int version = reader.readInteger();
+			final boolean latestStructure = version == DATA_FORMAT_VERSION;
+			if (!latestStructure) {
+				// Incorrect data format version
+				reader.reset();
+			}
+			boolean latestIds = true;
+			if (latestStructure) {
+				final int protocolVersion = reader.readInteger();
+				//todo do something if incorrect version
+				latestIds = protocolVersion == MinecraftServer.PROTOCOL_VERSION;
+			}
 
-            if (latestStructure && reader.readBoolean()) {
-                data.readIndexedSerializedData(reader);
-            }
+			// Get if the chunk has data indexes (used for chunk & blocks data)
+			final boolean hasDataIndex = reader.readBoolean();
+			if (hasDataIndex) {
+				// Get the data indexes which will be used to read all the individual data
+				typeToIndexMap = SerializableData.readDataIndexes(reader);
+			}
 
-            while (true) {
-                // Position
-                final short index = reader.readShort();
-                final byte x = ChunkUtils.blockIndexToChunkPositionX(index);
-                final short y = ChunkUtils.blockIndexToChunkPositionY(index);
-                final byte z = ChunkUtils.blockIndexToChunkPositionZ(index);
+			for (int i = 0; i < BIOME_COUNT; i++) {
+				final byte id = reader.readByte();
+				this.biomes[i] = BIOME_MANAGER.getById(id);
+			}
 
-                // Block type
-                final short blockStateId = reader.readShort();
-                final short customBlockId = reader.readShort();
+			setPopulated(reader.readBoolean());
+			setGenerated(reader.readBoolean());
+			boolean hasChunkData = reader.readBoolean();
 
-                // Data
-                SerializableData data = null;
-                {
-                    final boolean hasData = reader.readBoolean();
-                    // Data deserializer
-                    if (hasData) {
-                        // Read the data with the deserialized index map
-                        data = new SerializableDataImpl();
-                        data.readSerializedData(reader, typeToIndexMap);
-                    }
-                }
+			if (latestStructure && hasChunkData) {
+				data = new SerializableDataImpl();
+				((SerializableDataImpl) data).readIndexedSerializedData(reader);
+			}
 
-                if (customBlockId != 0) {
-                    chunkBatch.setSeparateBlocks(x, y, z, blockStateId, customBlockId, data);
-                } else {
-                    chunkBatch.setBlockStateId(x, y, z, blockStateId, data);
-                }
-            }
-        } catch (IndexOutOfBoundsException | IOException e) {
-            // Finished reading
-        }
+			while (true) {
+				// Position
+				final short index = reader.readShort();
+				final byte x = ChunkUtils.blockIndexToChunkPositionX(index);
+				final short y = ChunkUtils.blockIndexToChunkPositionY(index);
+				final byte z = ChunkUtils.blockIndexToChunkPositionZ(index);
 
-        // Place all the blocks from the batch
-        chunkBatch.unsafeFlush(callback); // Success, null if file isn't properly encoded
-    }
+				// Block type
+				final short blockStateId = reader.readShort();
+				final short customBlockId = reader.readShort();
 
-    @Override
-    protected ChunkDataPacket getFreshPacket() {
-        ChunkDataPacket fullDataPacket = new ChunkDataPacket();
-        fullDataPacket.biomes = biomes.clone();
-        fullDataPacket.chunkX = chunkX;
-        fullDataPacket.chunkZ = chunkZ;
-        fullDataPacket.blocksStateId = blocksStateId.clone();
-        fullDataPacket.customBlocksId = customBlocksId.clone();
-        fullDataPacket.blockEntities = new CopyOnWriteArraySet<>(blockEntities);
-        fullDataPacket.blocksData = new Int2ObjectOpenHashMap<>(blocksData);
-        return fullDataPacket;
-    }
+				// Data
+				SerializableData data = null;
+				{
+					final boolean hasBlockData = reader.readBoolean();
+					// Data deserializer
+					if (hasBlockData) {
+						// Read the data with the deserialized index map
+						data = new SerializableDataImpl();
+						data.readSerializedData(reader, typeToIndexMap);
+					}
+				}
+
+				if (customBlockId != 0) {
+					chunkBatch.setSeparateBlocks(x, y, z, blockStateId, customBlockId, data);
+				} else {
+					chunkBatch.setBlockStateId(x, y, z, blockStateId, data);
+				}
+			}
+		} catch (IndexOutOfBoundsException | IOException e) {
+			// Finished reading
+		}
+
+		// Place all the blocks from the batch
+		chunkBatch.unsafeFlush(callback); // Success, null if file isn't properly encoded
+	}
+
+	@Override
+	protected ChunkDataPacket getFreshPacket() {
+		ChunkDataPacket fullDataPacket = new ChunkDataPacket();
+		fullDataPacket.biomes = biomes.clone();
+		fullDataPacket.chunkX = chunkX;
+		fullDataPacket.chunkZ = chunkZ;
+		fullDataPacket.blocksStateId = blocksStateId.clone();
+		fullDataPacket.customBlocksId = customBlocksId.clone();
+		fullDataPacket.blockEntities = new HashSet<>(blockEntities);
+		fullDataPacket.blocksData = new Int2ObjectOpenHashMap<>(blocksData);
+		return fullDataPacket;
+	}
 
 }

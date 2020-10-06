@@ -1211,7 +1211,7 @@ public class Player extends LivingEntity implements CommandSender {
      */
     protected void onChunkChange(Chunk newChunk) {
         // Previous chunks indexes
-        final long[] lastVisibleChunks = viewableChunks.stream().mapToLong(viewableChunks ->
+        final long[] lastVisibleChunks = viewableChunks.stream().filter(chunk -> chunk.isGenerated()).mapToLong(viewableChunks ->
                 ChunkUtils.getChunkIndex(viewableChunks.getChunkX(), viewableChunks.getChunkZ())
         ).toArray();
 

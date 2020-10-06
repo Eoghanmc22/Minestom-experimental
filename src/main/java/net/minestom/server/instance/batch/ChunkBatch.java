@@ -2,6 +2,7 @@ package net.minestom.server.instance.batch;
 
 import lombok.Setter;
 import net.minestom.server.data.Data;
+import net.minestom.server.entity.Player;
 import net.minestom.server.instance.Chunk;
 import net.minestom.server.instance.ChunkGenerator;
 import net.minestom.server.instance.ChunkPopulator;
@@ -23,6 +24,8 @@ public class ChunkBatch implements InstanceBatch {
 
     private final InstanceContainer instance;
     private final Chunk chunk;
+    @Setter
+    private boolean canEditOtherChunks = true;
     @Setter
     private boolean dontReplace = false;
 
@@ -65,7 +68,7 @@ public class ChunkBatch implements InstanceBatch {
         blockData.data = data;
         blockData.dontReplace = dontReplace;
 
-        if ((x < 0 || x >= Chunk.CHUNK_SIZE_X) || (z < 0 || z >= Chunk.CHUNK_SIZE_Z)) {
+        if ((x < 0 || x >= Chunk.CHUNK_SIZE_X) || (z < 0 || z >= Chunk.CHUNK_SIZE_Z) && canEditOtherChunks) {
             this.outsideData.add(blockData);
         } else
             this.dataList.add(blockData);
@@ -131,25 +134,32 @@ public class ChunkBatch implements InstanceBatch {
                     data.apply(chunk);
                 }
                 ArrayList<Chunk> outsideChunks = new ArrayList<>();
-                for (BlockData data : outsideData) {
-                    instance.getTempChunk(ChunkUtils.getChunkCoordinate(this.chunk.getChunkX() * 16 + data.x),
-                            ChunkUtils.getChunkCoordinate(this.chunk.getChunkZ() * 16 + data.z), chunk -> {
-                                data.apply(chunk);
-                                outsideChunks.add(chunk);
-                            });
-                }
-
+                if (canEditOtherChunks)
+                    for (BlockData data : outsideData) {
+                        instance.getTempChunk(ChunkUtils.getChunkCoordinate(this.chunk.getChunkX() * 16 + data.x),
+                                ChunkUtils.getChunkCoordinate(this.chunk.getChunkZ() * 16 + data.z), chunk -> {
+                                    data.apply(chunk);
+                                    outsideChunks.add(chunk);
+                                });
+                    }
                 // Refresh chunk for viewers
                 chunk.sendChunkUpdate();
-                for (final Chunk chunk : outsideChunks) {
-                    chunk.sendChunkUpdate();
-                    if (chunk.getViewers().isEmpty())
-                        instance.unloadChunk(chunk);
-                }
+                if (canEditOtherChunks)
+                    for (final Chunk chunk : outsideChunks) {
+                        chunk.sendChunkUpdate();
+                    }
 
                 if (callback != null) {
                     if (safeCallback) {
-                        instance.scheduleNextTick(inst -> callback.accept(chunk));
+                        instance.scheduleNextTick(inst -> {
+                            callback.accept(chunk);
+                            if (canEditOtherChunks && !chunk.getViewers().isEmpty())
+                                for (final Chunk chunkT : outsideChunks)
+                                    for (final Player viewer : chunk.getViewers()) {
+                                        //TODO TEST
+                                        viewer.getViewableChunks().add(chunkT);
+                                    }
+                        });
                     } else {
                         callback.accept(chunk);
                     }

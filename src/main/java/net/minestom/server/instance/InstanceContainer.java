@@ -242,7 +242,7 @@ public class InstanceContainer extends Instance {
      * @param blockPosition the block position
      */
     private void callBlockDestroy(Chunk chunk, int index, CustomBlock previousBlock, BlockPosition blockPosition) {
-        final Data previousData = chunk.getData(index);
+        final Data previousData = chunk.getBlockData(index);
         previousBlock.onDestroy(this, blockPosition, previousData);
     }
 
@@ -259,7 +259,7 @@ public class InstanceContainer extends Instance {
         final CustomBlock actualBlock = chunk.getCustomBlock(index);
         if (actualBlock == null)
             return;
-        final Data previousData = chunk.getData(index);
+        final Data previousData = chunk.getBlockData(index);
         actualBlock.onPlace(this, blockPosition, previousData);
     }
 
@@ -407,7 +407,7 @@ public class InstanceContainer extends Instance {
             };
 
             final boolean loaded = chunkLoader.loadChunk(this, chunkX, chunkZ, chunkC -> {
-                if (!chunkC.getData().getOrDefault("generated", true)) {
+                if (!chunkC.isGenerated()) {
                     r.run();
                     return;
                 }
@@ -425,7 +425,7 @@ public class InstanceContainer extends Instance {
     public void loadChunk(int chunkX, int chunkZ, ChunkCallback callback) {
         final Chunk chunk = getChunk(chunkX, chunkZ);
         boolean partiallyGenerated = false;
-        if (chunk != null && !(partiallyGenerated = !chunk.getData().getOrDefault("generated", true))) {
+        if (chunk != null && !(partiallyGenerated = !chunk.isGenerated())) {
             // Chunk already loaded
             if (callback != null)
                 callback.accept(chunk);
@@ -439,7 +439,7 @@ public class InstanceContainer extends Instance {
     public void loadOptionalChunk(int chunkX, int chunkZ, ChunkCallback callback) {
         final Chunk chunk = getChunk(chunkX, chunkZ);
         boolean partiallyGenerated = false;
-        if (chunk != null && !(partiallyGenerated = !chunk.getData().getOrDefault("generated", true))) {
+        if (chunk != null && !(partiallyGenerated = !chunk.isGenerated())) {
             // Chunk already loaded
             if (callback != null)
                 callback.accept(chunk);
@@ -590,6 +590,7 @@ public class InstanceContainer extends Instance {
             cacheChunk(chunk);
         } else {
             chunk = getChunk(chunkX, chunkZ);
+            chunk.setGenerated(true);
         }
 
         if (chunkGenerator != null && blockProvider == null) {
