@@ -376,6 +376,13 @@ public class InstanceContainer extends Instance {
         return allowed;
     }
 
+    /**
+     * Creates a chunk without generating terrain.
+     *
+     * @param chunkX   chunk x position
+     * @param chunkZ   chunk z position
+     * @param callback code to run on the temp chunk
+     */
     public void getTempChunk(int chunkX, int chunkZ, ChunkCallback callback) {
         final Chunk chunk = getChunk(chunkX, chunkZ);
         if (chunk != null) {
@@ -425,7 +432,7 @@ public class InstanceContainer extends Instance {
     public void loadChunk(int chunkX, int chunkZ, ChunkCallback callback) {
         final Chunk chunk = getChunk(chunkX, chunkZ);
         boolean partiallyGenerated = chunk != null && chunk.isGenerated();
-        if (chunk != null && chunk.isGenerated()) {
+        if (chunk != null && partiallyGenerated) {
             // Chunk already loaded
             if (callback != null)
                 callback.accept(chunk);
@@ -439,7 +446,7 @@ public class InstanceContainer extends Instance {
     public void loadOptionalChunk(int chunkX, int chunkZ, ChunkCallback callback) {
         final Chunk chunk = getChunk(chunkX, chunkZ);
         boolean partiallyGenerated = chunk != null && chunk.isGenerated();
-        if (chunk != null && chunk.isGenerated()) {
+        if (chunk != null && partiallyGenerated) {
             // Chunk already loaded
             if (callback != null)
                 callback.accept(chunk);
