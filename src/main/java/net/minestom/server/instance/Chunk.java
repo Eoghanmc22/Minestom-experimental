@@ -1,7 +1,6 @@
 package net.minestom.server.instance;
 
 import io.netty.buffer.ByteBuf;
-import it.unimi.dsi.fastutil.ints.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
@@ -76,7 +75,6 @@ public abstract class Chunk implements Viewable, DataContainer {
 	@Getter
 	@Setter(AccessLevel.PACKAGE)
 	protected boolean generated = true;
-	protected Data data;
 
     public Chunk(Instance instance, Biome[] biomes, int chunkX, int chunkZ) {
         this.instance = instance;
