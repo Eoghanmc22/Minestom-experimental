@@ -220,15 +220,15 @@ public class DynamicChunk extends Chunk {
             binaryWriter.writeByte(id);
         }
 
-		binaryWriter.writeBoolean(populated);
-		binaryWriter.writeBoolean(generated);
+        binaryWriter.writeBoolean(populated);
+        binaryWriter.writeBoolean(generated);
 
-		boolean hasChunkData = data instanceof SerializableData;
+        boolean hasChunkData = data instanceof SerializableData && !data.isEmpty();
 
-		binaryWriter.writeBoolean(hasChunkData);
-		if (hasChunkData) {
-			binaryWriter.writeBytes(((SerializableData) data).getSerializedData(new Object2ShortOpenHashMap<>(), true));
-		}
+        binaryWriter.writeBoolean(hasChunkData);
+        if (hasChunkData) {
+            binaryWriter.writeBytes(((SerializableData) data).getSerializedData(typeToIndexMap, false));
+        }
 
         for (byte x = 0; x < CHUNK_SIZE_X; x++) {
             for (short y = 0; y < CHUNK_SIZE_Y; y++) {
@@ -288,7 +288,7 @@ public class DynamicChunk extends Chunk {
     @Override
     public void readChunk(BinaryReader reader, ChunkCallback callback) {
         // Used for blocks data
-        Object2ShortMap<String> typeToIndexMap = null;
+        Object2ShortMap<String> typeToIndexMap = new Object2ShortOpenHashMap<>();
 
         ChunkBatch chunkBatch = instance.createChunkBatch(this);
         try {
@@ -322,9 +322,9 @@ public class DynamicChunk extends Chunk {
 				boolean hasChunkData = reader.readBoolean();
 
 				if (hasChunkData) {
-					data = new SerializableDataImpl();
-					((SerializableDataImpl) data).readIndexedSerializedData(reader);
-				}
+                    data = new SerializableDataImpl();
+                    ((SerializableDataImpl) data).readSerializedData(reader, typeToIndexMap);
+                }
             while (true) {
                 // Position
                 final short index = reader.readShort();
