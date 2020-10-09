@@ -47,7 +47,7 @@ public class CommandDispatcher {
 
     public void execute(CommandSender source, String commandString) {
         CommandResult result = parse(commandString);
-        result.execute(source);
+        result.execute(source, commandString);
     }
 
     public Set<Command> getCommands() {
@@ -234,6 +234,9 @@ public class CommandDispatcher {
 
     }
 
+    /**
+     * Represents a command ready to be executed (already parsed)
+     */
     private static class CommandResult {
 
         // Command
@@ -254,9 +257,12 @@ public class CommandDispatcher {
          * The command will not be executed if the {@link CommandCondition} of the command
          * is not validated
          *
-         * @param source the command source
+         * @param source        the command source
+         * @param commandString the command string
          */
-        public void execute(CommandSender source) {
+        public void execute(CommandSender source, String commandString) {
+            // Global listener
+            command.globalListener(source, arguments, commandString);
             // Condition check
             final CommandCondition condition = command.getCondition();
             if (condition != null) {
@@ -269,7 +275,7 @@ public class CommandDispatcher {
                 // An executor has been found
                 executor.apply(source, arguments);
             } else if (callback != null) {
-                // No syntax has been validated but the faulty argument has been found
+                // No syntax has been validated but the faulty argument with a callback has been found
                 // Execute the faulty argument callback
                 callback.apply(source, value, error);
             }
