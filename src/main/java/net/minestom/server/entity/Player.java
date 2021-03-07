@@ -455,25 +455,24 @@ public class Player extends LivingEntity implements CommandSender {
                 if (optionalUpdatePacket != null) {
                     sendPacketToViewers(optionalUpdatePacket);
                 }
-
-                if (playerConnection instanceof NettyPlayerConnection) {
-                    ByteBuf buf = BufUtils.getBuffer(true, viewers.size() * 19);
-                    for (Player player : viewers) {
-                        player.lock.readLock().lock();
-                        if (player.updateBuf != null) {
-                            buf.writeBytes(player.updateBuf, player.updateBuf.readerIndex(), buf.readableBytes());
-                        }
-                        player.lock.readLock().unlock();
+            }
+            if (playerConnection instanceof NettyPlayerConnection) {
+                ByteBuf buf = BufUtils.getBuffer(true, viewers.size() * 19);
+                for (Player player : viewers) {
+                    player.lock.readLock().lock();
+                    if (player.updateBuf != null) {
+                        buf.writeBytes(player.updateBuf, player.updateBuf.readerIndex(), player.updateBuf.readableBytes());
                     }
-                    ((NettyPlayerConnection) playerConnection).write(new FramedPacket(buf));
-                } else {
-                    for (Player player : viewers) {
-                        player.lock.readLock().lock();
-                        if (player.updatePacket != null) {
-                            playerConnection.sendPacket(player.updatePacket);
-                        }
-                        player.lock.readLock().unlock();
+                    player.lock.readLock().unlock();
+                }
+                ((NettyPlayerConnection) playerConnection).write(new FramedPacket(buf, true));
+            } else {
+                for (Player player : viewers) {
+                    player.lock.readLock().lock();
+                    if (player.updatePacket != null) {
+                        playerConnection.sendPacket(player.updatePacket);
                     }
+                    player.lock.readLock().unlock();
                 }
             }
 
