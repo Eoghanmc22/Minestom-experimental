@@ -1,6 +1,7 @@
 package net.minestom.server.entity;
 
 import com.google.common.collect.Queues;
+import io.netty.buffer.ByteBuf;
 import net.minestom.server.MinecraftServer;
 import net.minestom.server.advancements.AdvancementTab;
 import net.minestom.server.attribute.AttributeInstance;
@@ -34,6 +35,7 @@ import net.minestom.server.listener.PlayerDiggingListener;
 import net.minestom.server.network.ConnectionManager;
 import net.minestom.server.network.ConnectionState;
 import net.minestom.server.network.PlayerProvider;
+import net.minestom.server.network.netty.packet.FramedPacket;
 import net.minestom.server.network.packet.client.ClientPlayPacket;
 import net.minestom.server.network.packet.client.play.ClientChatMessagePacket;
 import net.minestom.server.network.packet.server.ServerPacket;
@@ -50,6 +52,7 @@ import net.minestom.server.sound.Sound;
 import net.minestom.server.sound.SoundCategory;
 import net.minestom.server.stat.PlayerStatistic;
 import net.minestom.server.utils.*;
+import net.minestom.server.utils.binary.BinaryWriter;
 import net.minestom.server.utils.callback.OptionalCallback;
 import net.minestom.server.utils.chunk.ChunkCallback;
 import net.minestom.server.utils.chunk.ChunkUtils;
@@ -67,6 +70,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Those are the major actors of the server,
@@ -327,6 +332,10 @@ public class Player extends LivingEntity implements CommandSender {
         this.playerConnection.setPlayer(this);
     }
 
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    private ServerPacket updatePacket;
+    private ByteBuf updateBuf;
+
     @Override
     public void update(long time) {
         // Network tick
@@ -451,19 +460,28 @@ public class Player extends LivingEntity implements CommandSender {
             if (positionChanged || viewChanged) {
                 // Player moved since last time
 
-                ServerPacket updatePacket;
+                ServerPacket updatePacketl;
                 ServerPacket optionalUpdatePacket = null;
                 if (positionChanged && viewChanged) {
-                    updatePacket = EntityPositionAndRotationPacket.getPacket(getEntityId(),
+                    updatePacketl = EntityPositionAndRotationPacket.getPacket(getEntityId(),
                             position, new Position(lastPlayerSyncX, lastPlayerSyncY, lastPlayerSyncZ), onGround);
                 } else if (positionChanged) {
-                    updatePacket = EntityPositionPacket.getPacket(getEntityId(),
+                    updatePacketl = EntityPositionPacket.getPacket(getEntityId(),
                             position, new Position(lastPlayerSyncX, lastPlayerSyncY, lastPlayerSyncZ), onGround);
                 } else {
                     // View changed
-                    updatePacket = EntityRotationPacket.getPacket(getEntityId(),
+                    updatePacketl = EntityRotationPacket.getPacket(getEntityId(),
                             position.getYaw(), position.getPitch(), onGround);
                 }
+                ByteBuf br = PacketUtils.createFramedPacket(updatePacketl, true);
+
+                lock.writeLock().lock();
+                if (updateBuf != null) {
+                    updateBuf.release();
+                }
+                updateBuf = br;
+                updatePacket = updatePacketl;
+                lock.writeLock().unlock();
 
                 if (viewChanged) {
                     // Yaw from the rotation packet seems to be ignored, which is why this is required
@@ -475,11 +493,28 @@ public class Player extends LivingEntity implements CommandSender {
 
                 // Send the update packet
                 if (optionalUpdatePacket != null) {
-                    sendPacketsToViewers(updatePacket, optionalUpdatePacket);
-                } else {
-                    sendPacketToViewers(updatePacket);
+                    sendPacketToViewers(optionalUpdatePacket);
                 }
 
+                if (playerConnection instanceof NettyPlayerConnection) {
+                    ByteBuf buf = BufUtils.getBuffer(true, viewers.size() * 19);
+                    for (Player player : viewers) {
+                        player.lock.readLock().lock();
+                        if (player.updateBuf != null) {
+                            buf.writeBytes(player.updateBuf, player.updateBuf.readerIndex(), buf.readableBytes());
+                        }
+                        player.lock.readLock().unlock();
+                    }
+                    ((NettyPlayerConnection) playerConnection).write(new FramedPacket(buf));
+                } else {
+                    for (Player player : viewers) {
+                        player.lock.readLock().lock();
+                        if (player.updatePacket != null) {
+                            playerConnection.sendPacket(player.updatePacket);
+                        }
+                        player.lock.readLock().unlock();
+                    }
+                }
             }
 
             // Update sync data
