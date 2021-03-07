@@ -391,7 +391,7 @@ public class Entity implements Viewable, EventHandler, DataContainer, Permission
      *
      * @param entityType the new entity type
      */
-    public final void switchEntityType(@NotNull EntityType entityType) {
+    public void switchEntityType(@NotNull EntityType entityType) {
         synchronized (entityTypeLock) {
             this.entityType = entityType;
             this.metadata = new Metadata(this);
@@ -851,9 +851,7 @@ public class Entity implements Viewable, EventHandler, DataContainer, Permission
      * @param instance the new instance of the entity
      * @throws NullPointerException  if {@code instance} is null
      * @throws IllegalStateException if {@code instance} has not been registered in {@link InstanceManager}
-     * @deprecated Use {@link Entity#setInstance(Instance, Position)} instead.
      */
-    @Deprecated
     public void setInstance(@NotNull Instance instance) {
         setInstance(instance, this.position);
     }

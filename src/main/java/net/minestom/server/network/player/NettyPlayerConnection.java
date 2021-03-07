@@ -129,26 +129,23 @@ public class NettyPlayerConnection extends PlayerConnection {
                         // This packet explicitly asks to do not retrieve the cache
                         write(serverPacket);
                     } else {
-                        final long time = cacheablePacket.getTimestamp();
+                        final long timestamp = cacheablePacket.getTimestamp();
                         // Try to retrieve the cached buffer
                         TemporaryCache<TimedBuffer> temporaryCache = cacheablePacket.getCache();
                         TimedBuffer timedBuffer = temporaryCache.retrieve(identifier);
-                        boolean shouldUpdate = false;
-                        if (timedBuffer == null) {
-                            // Buffer not found, create and cache it
-                            final ByteBuf buffer = PacketUtils.createFramedPacket(serverPacket, false);
-                            timedBuffer = new TimedBuffer(buffer, time);
-                            shouldUpdate = true;
-                        } else if (time > timedBuffer.getTimestamp()) { // Verify if `serverPacket` is more up-to-date
-                            shouldUpdate = true;
-                        }
+
+                        // Update the buffer if non-existent or outdated
+                        final boolean shouldUpdate = timedBuffer == null ||
+                                timestamp > timedBuffer.getTimestamp();
 
                         if (shouldUpdate) {
+                            final ByteBuf buffer = PacketUtils.createFramedPacket(serverPacket, false);
+                            timedBuffer = new TimedBuffer(buffer, timestamp);
+
                             temporaryCache.cache(identifier, timedBuffer);
                         }
 
-                        FramedPacket framedPacket = new FramedPacket(timedBuffer.getBuffer());
-                        write(framedPacket);
+                        write(new FramedPacket(timedBuffer.getBuffer()));
                     }
 
                 } else
